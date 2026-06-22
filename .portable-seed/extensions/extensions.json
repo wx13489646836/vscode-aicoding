@@ -1,0 +1,21 @@
+[
+  {
+    "identifier": {
+      "id": "holazz.vsc-open-in-browser"
+    },
+    "version": "0.0.6",
+    "location": {
+      "$mid": 1,
+      "path": "/c:/Users/14984/.vscode-oss-dev/extensions/holazz.vsc-open-in-browser-0.0.6",
+      "scheme": "file"
+    },
+    "relativeLocation": "holazz.vsc-open-in-browser-0.0.6",
+    "metadata": {
+      "installedTimestamp": 1775612400000,
+      "pinned": false,
+      "source": "vsix",
+      "publisherDisplayName": "zz",
+      "isPreReleaseVersion": false
+    }
+  }
+]
