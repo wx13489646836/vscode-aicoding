@@ -5,6 +5,7 @@
 
 import { WorkbenchActionExecutedClassification, WorkbenchActionExecutedEvent } from '../../../../../base/common/actions.js';
 import { raceTimeout, timeout } from '../../../../../base/common/async.js';
+import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
@@ -15,20 +16,22 @@ import { Disposable, DisposableStore, IDisposable, toDisposable } from '../../..
 import { URI } from '../../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
+import { IFileService, IFileStat } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import product from '../../../../../platform/product/common/product.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkbenchEnvironmentService } from '../../../../services/environment/common/environmentService.js';
 import { nullExtensionDescription } from '../../../../services/extensions/common/extensions.js';
 import { CountTokensCallback, ILanguageModelToolsService, IPreparedToolInvocation, IToolData, IToolImpl, IToolInvocation, IToolResult, ToolDataSource, ToolProgress } from '../../common/tools/languageModelToolsService.js';
-import { IChatAgentImplementation, IChatAgentRequest, IChatAgentResult, IChatAgentService } from '../../common/participants/chatAgents.js';
+import { IChatAgentHistoryEntry, IChatAgentImplementation, IChatAgentRequest, IChatAgentResult, IChatAgentService } from '../../common/participants/chatAgents.js';
 import { ChatEntitlement, ChatEntitlementContext, IChatEntitlementService } from '../../../../services/chat/common/chatEntitlementService.js';
 import { ChatModel, ChatRequestModel, IChatRequestModel, IChatRequestVariableData } from '../../common/model/chatModel.js';
 import { ChatMode } from '../../common/chatModes.js';
 import { ChatRequestAgentPart, ChatRequestToolPart } from '../../common/requestParser/chatParserTypes.js';
-import { IChatProgress, IChatService } from '../../common/chatService/chatService.js';
+import { IChatFollowup, IChatProgress, IChatResponseProgressFileTreeData, IChatService } from '../../common/chatService/chatService.js';
 import { IChatRequestToolEntry } from '../../common/attachments/chatVariableEntries.js';
 import { ChatAgentLocation, ChatConfiguration, ChatModeKind } from '../../common/constants.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
@@ -56,6 +59,7 @@ import { IDefaultAccountService } from '../../../../../platform/defaultAccount/c
 import { IHostService } from '../../../../services/host/browser/host.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
 import { IExtensionsWorkbenchService } from '../../../extensions/common/extensions.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
 
 const defaultChat = {
 	extensionId: product.defaultChatAgent?.extensionId ?? '',
@@ -70,9 +74,136 @@ const ToolsAgentContextKey = ContextKeyExpr.and(
 	ContextKeyExpr.not(`previewFeaturesDisabled`) // Set by extension
 );
 
+const TITANIUM_WORKFLOW_TRIGGER = 'v0-v3';
+const TITANIUM_WORKFLOW_DIR = 'titanium-vibe-coding-v0-v3-guide';
+const TITANIUM_WORKFLOW_SOURCE_ROOT = 'D:/titanium-vibe-coding-v0-v3-guide';
+const TITANIUM_WORKFLOW_SECTION_DELAY = 4200;
+const TITANIUM_WORKFLOW_STREAM_FRAMES = 18;
+const TITANIUM_WORKFLOW_PROGRESS_DELAY = 1600;
+const TITANIUM_WORKFLOW_IGNORED_NAMES = new Set(['node_modules', '.next', 'tsconfig.tsbuildinfo']);
+
+type TitaniumWorkflowStage = 'v0' | 'v1' | 'v2' | 'v3';
+type TitaniumWorkflowPhase = 'planning' | 'ready' | 'running' | 'done';
+
+interface ITitaniumWorkflowStageConfig {
+	readonly stage: TitaniumWorkflowStage;
+	readonly promptFile: string;
+	readonly title: string;
+	readonly planIntro: string;
+	readonly checkMessage: string;
+	readonly codingMessage: string;
+	readonly doneMessage: string;
+	readonly recommendedSelection: string;
+	readonly options: readonly { readonly title: string; readonly body: string }[];
+	readonly streamedFiles: readonly { readonly relativePath: string; readonly label: string; readonly language: string; readonly message: string }[];
+}
+
+interface ITitaniumWorkflowState {
+	stage: TitaniumWorkflowStage;
+	phase: TitaniumWorkflowPhase;
+	targetRoot: URI;
+	lastUserMessage: string;
+}
+
+const TITANIUM_WORKFLOW_STAGE_ORDER: readonly TitaniumWorkflowStage[] = ['v0', 'v1', 'v2', 'v3'];
+
+const TITANIUM_WORKFLOW_STAGES: Record<TitaniumWorkflowStage, ITitaniumWorkflowStageConfig> = {
+	v0: {
+		stage: 'v0',
+		promptFile: 'V0_PROMPT.md',
+		title: 'v0 技术选型与项目初始化',
+		planIntro: '我会先把这个独立站的工程基础定清楚。当前阶段只做技术栈、目录结构和最小可运行项目，不进入商品页设计。',
+		checkMessage: '正在确认 Node.js 前端工程结构、基础配置和后续 3D 能力预留。',
+		codingMessage: '正在创建 Next.js / React / TypeScript / Tailwind 工程基础。',
+		doneMessage: 'v0 工程基础已经完成：项目可以继续承接图片、视频、真实 3D 模型和客服能力。',
+		recommendedSelection: '前端框架 A，样式方案 A，3D 技术预留 A，编程语言 A，包管理工具 A，基础文件 C',
+		options: [
+			{ title: '前端框架', body: 'A. Next.js + React；B. Vite + React；C. 原生 HTML/CSS/JS' },
+			{ title: '样式方案', body: 'A. Tailwind CSS；B. CSS Modules；C. 普通全局 CSS' },
+			{ title: '3D 技术预留', body: 'A. Babylon.js；B. Three.js；C. 暂不安装 3D 依赖' },
+			{ title: '语言与工具', body: 'A. TypeScript + npm；B. JavaScript + npm；C. TypeScript + pnpm' }
+		],
+		streamedFiles: [
+			{ relativePath: 'titanium-cup-showcase/package.json', label: '项目依赖', language: 'json', message: '正在写入项目依赖和开发脚本。' },
+			{ relativePath: 'titanium-cup-showcase/src/app/page.tsx', label: '首页占位', language: 'typescriptreact', message: '正在写入最小可运行首页。' },
+			{ relativePath: 'titanium-cup-showcase/src/app/globals.css', label: '全局样式', language: 'css', message: '正在整理基础样式入口。' },
+			{ relativePath: 'titanium-cup-showcase/README.md', label: '项目说明', language: 'markdown', message: '正在补充 v0 工程说明。' }
+		]
+	},
+	v1: {
+		stage: 'v1',
+		promptFile: 'V0_TO_V1_PROMPT.md',
+		title: 'v1 基础商品独立站',
+		planIntro: '我会基于已有工程继续做第一个可用英文商品页。编码前先检查项目结构和真实产品图片，页面只做基础转化闭环。',
+		checkMessage: '正在检查 v0 工程、产品图片和基础页面所需资源。',
+		codingMessage: '正在编写基础商品独立站页面。',
+		doneMessage: 'v1 基础商品独立站已经完成：页面包含 Hero、主推产品、价格、规格、购买按钮、推荐产品和页脚。',
+		recommendedSelection: '页面结构 A，视觉风格 A，主推产品布局 A，推荐产品数量 B，商品转化重点 B',
+		options: [
+			{ title: '页面结构', body: 'A. 标准单页落地页；B. 商品详情式首页；C. 产品目录式首页' },
+			{ title: '视觉风格', body: 'A. 简洁白底电商风；B. 浅灰卡片风；C. 基础深色风' },
+			{ title: '主推产品布局', body: 'A. 左图右文；B. 上图下文；C. 大图居中 + 参数卡片' },
+			{ title: '商品转化重点', body: 'A. 价格和购买；B. 材质健康轻量；C. 礼品属性和文化纹样' }
+		],
+		streamedFiles: [
+			{ relativePath: 'titanium-cup-showcase/src/app/page.tsx', label: '商品首页', language: 'typescriptreact', message: '正在写入基础商品首页结构。' },
+			{ relativePath: 'titanium-cup-showcase/src/app/globals.css', label: '页面样式', language: 'css', message: '正在整理基础电商页面样式。' },
+			{ relativePath: 'run-v1.cmd', label: '启动脚本', language: 'bat', message: '正在补充本地预览启动脚本。' },
+			{ relativePath: 'README.md', label: '阶段说明', language: 'markdown', message: '正在记录 v1 页面说明。' }
+		]
+	},
+	v2: {
+		stage: 'v2',
+		promptFile: 'V1_TO_V2_PROMPT.md',
+		title: 'v2 高端品牌媒体页',
+		planIntro: '我会在现有基础商品页上继续增强视觉、媒体展示和购买说服力。当前阶段仍不接入 3D 和客服。',
+		checkMessage: '正在检查页面结构、真实图片、视频素材和可用于场景展示的资源。',
+		codingMessage: '正在升级高端品牌媒体页和图片/视频展示体验。',
+		doneMessage: 'v2 高端品牌媒体页已经完成：黑金视觉、产品图库、视频、场景展示、材质卖点和转化信息都已补齐。',
+		recommendedSelection: '视觉方向 A，首屏结构 A，媒体展示方式 B，场景展示重点 D，页面复杂度 A',
+		options: [
+			{ title: '视觉方向', body: 'A. 黑金高端钛金属风；B. 明亮高级电商风；C. 东方文化礼品风' },
+			{ title: '首屏结构', body: 'A. 左侧卖点 + 右侧大图；B. 海报式首屏；C. 主图居中' },
+			{ title: '媒体展示方式', body: 'A. 多图缩略图切换；B. 图片 + 视频混合切换；C. 单独视频模块' },
+			{ title: '场景展示重点', body: 'A. Daily Carry；B. Tea & Coffee；C. Gift-ready；D. 综合展示' }
+		],
+		streamedFiles: [
+			{ relativePath: 'titanium-cup-showcase/src/app/page.tsx', label: '品牌首页', language: 'typescriptreact', message: '正在重构高端品牌首页。' },
+			{ relativePath: 'titanium-cup-showcase/src/app/globals.css', label: '视觉系统', language: 'css', message: '正在整理黑金钛金属视觉层级。' },
+			{ relativePath: 'V1_TO_V2_CHANGES.md', label: '增量记录', language: 'markdown', message: '正在记录本轮增量改造。' },
+			{ relativePath: 'run-v2.cmd', label: '启动脚本', language: 'bat', message: '正在补充本地预览启动脚本。' }
+		]
+	},
+	v3: {
+		stage: 'v3',
+		promptFile: 'V2_TO_V3_PROMPT.md',
+		title: 'v3 真实 3D 与英文客服最终版',
+		planIntro: '我会在高端品牌媒体页基础上接入真实 OBJ/MTL/贴图模型、入场 loading、3D 交互控制和右下角英文客服。',
+		checkMessage: '正在检查真实 OBJ、MTL、PNG 贴图和最终交互所需组件边界。',
+		codingMessage: '正在接入真实 3D 模型、页面 loading 和英文客服。',
+		doneMessage: 'v3 最终交互版已经完成：真实 3D、加载体验、交互控制和英文客服已接入。',
+		recommendedSelection: '3D 加载方式 A，模型资产策略 A，交互控制 C，客服形式 C',
+		options: [
+			{ title: '3D 加载方式', body: 'A. 页面进入后立即加载；B. 滚动到 3D 区域再加载；C. 点击按钮后加载' },
+			{ title: '模型资产策略', body: 'A. 严格使用原始 OBJ/MTL/贴图；B. 放入 public 但不转换；C. 使用外部资源路径' },
+			{ title: '交互控制', body: 'A. 拖动 + 缩放；B. 拖动 + 缩放 + 自动旋转；C. 自动旋转 + 暂停 + 重置视角' },
+			{ title: '客服形式', body: 'A. FAQ 列表；B. 悬浮客服按钮；C. 聊天弹窗 + 快捷问题' }
+		],
+		streamedFiles: [
+			{ relativePath: 'titanium-cup-showcase/src/components/Model3DViewer.tsx', label: '3D 查看器', language: 'typescriptreact', message: '正在写入 Babylon.js 3D 查看器。' },
+			{ relativePath: 'titanium-cup-showcase/src/components/PageModelLoadingOverlay.tsx', label: '加载体验', language: 'typescriptreact', message: '正在写入 3D 加载等待层。' },
+			{ relativePath: 'titanium-cup-showcase/src/components/SmartCS.tsx', label: '英文客服', language: 'typescriptreact', message: '正在写入右下角英文客服。' },
+			{ relativePath: 'titanium-cup-showcase/src/app/page.tsx', label: '页面接入', language: 'typescriptreact', message: '正在把 3D 和客服接入首页。' },
+			{ relativePath: 'titanium-cup-showcase/next.config.ts', label: '开发配置', language: 'typescript', message: '正在补充本地开发兼容配置。' },
+			{ relativePath: 'run-v3.cmd', label: '启动脚本', language: 'bat', message: '正在补充本地预览启动脚本。' }
+		]
+	}
+};
+
 
 export class SetupAgent extends Disposable implements IChatAgentImplementation {
 
+	private readonly titaniumWorkflowStates = new ResourceMap<ITitaniumWorkflowState>();
 
 	static registerDefaultAgents(instantiationService: IInstantiationService, location: ChatAgentLocation, mode: ChatModeKind, context: ChatEntitlementContext, controller: Lazy<ChatSetupController>): { agent: SetupAgent; disposable: IDisposable } {
 		return instantiationService.invokeFunction(accessor => {
@@ -202,6 +333,9 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		@IOutputService private readonly outputService: IOutputService,
 		@IExtensionsWorkbenchService private readonly extensionsWorkbenchService: IExtensionsWorkbenchService,
 		@ICommandService private readonly commandService: ICommandService,
+		@IFileService private readonly fileService: IFileService,
+		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
+		@IEditorService private readonly editorService: IEditorService,
 	) {
 		super();
 
@@ -682,6 +816,10 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 	private async doInvokeWithSetup(request: IChatAgentRequest, progress: (part: IChatProgress) => void, chatService: IChatService, languageModelsService: ILanguageModelsService, chatWidgetService: IChatWidgetService, chatAgentService: IChatAgentService, languageModelToolsService: ILanguageModelToolsService, defaultAccountService: IDefaultAccountService): Promise<IChatAgentResult> {
 		this.telemetryService.publicLog2<WorkbenchActionExecutedEvent, WorkbenchActionExecutedClassification>('workbenchActionExecuted', { id: CHAT_SETUP_ACTION_ID, from: 'chat' });
 
+		if (await this.handleTitaniumWorkflowRequest(request, progress)) {
+			return {};
+		}
+
 		if (
 			this.context.state.entitlement === ChatEntitlement.Unknown &&
 			!this.chatEntitlementService.anonymous
@@ -756,6 +894,485 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		}
 
 		return {};
+	}
+
+	async provideFollowups(request: IChatAgentRequest, _result: IChatAgentResult, _history: IChatAgentHistoryEntry[], _token: CancellationToken): Promise<IChatFollowup[]> {
+		const state = this.titaniumWorkflowStates.get(request.sessionResource);
+		if (!state) {
+			return [];
+		}
+
+		const createFollowup = (title: string, message: string, tooltip: string): IChatFollowup => ({
+			kind: 'reply',
+			agentId: request.agentId,
+			title,
+			message,
+			tooltip
+		});
+
+		if (state.phase === 'planning' || state.phase === 'ready') {
+			const config = TITANIUM_WORKFLOW_STAGES[state.stage];
+			return [
+				createFollowup('使用推荐方案并开始', `使用推荐方案并开始 ${state.stage}`, config.recommendedSelection),
+				createFollowup('重新查看计划', `重新查看 ${state.stage} 计划`, '重新输出当前阶段的 Plan 和选项。')
+			];
+		}
+
+		if (state.phase === 'done') {
+			const nextStage = this.getNextTitaniumWorkflowStage(state.stage);
+			if (nextStage) {
+				return [
+					createFollowup(`继续做 ${nextStage}`, `继续做 ${nextStage}`, `进入 ${TITANIUM_WORKFLOW_STAGES[nextStage].title}。`)
+				];
+			}
+		}
+
+		return [];
+	}
+
+	private async handleTitaniumWorkflowRequest(request: IChatAgentRequest, progress: (part: IChatProgress) => void): Promise<boolean> {
+		const state = this.titaniumWorkflowStates.get(request.sessionResource);
+		const normalizedMessage = this.normalizeTitaniumWorkflowMessage(request.message);
+
+		if (state) {
+			state.lastUserMessage = request.message;
+
+			if (this.isTitaniumWorkflowPlanReplayRequest(normalizedMessage)) {
+				await this.runTitaniumWorkflowPlan(state, progress, true);
+				return true;
+			}
+
+			const requestedStage = this.getRequestedTitaniumWorkflowStage(normalizedMessage);
+			if (requestedStage && (state.phase === 'done' || requestedStage === state.stage)) {
+				const isCurrentStage = requestedStage === state.stage;
+				state.stage = requestedStage;
+				state.phase = 'planning';
+				await this.runTitaniumWorkflowPlan(state, progress, isCurrentStage);
+				return true;
+			}
+
+			if (state.phase === 'planning' || state.phase === 'ready') {
+				if (this.isTitaniumWorkflowStartRequest(normalizedMessage)) {
+					state.phase = 'running';
+					await this.runTitaniumWorkflowStage(state, progress);
+					return true;
+				}
+
+				await this.runTitaniumWorkflowPlan(state, progress, true);
+				return true;
+			}
+
+			if (state.phase === 'done') {
+				const nextStage = this.getNextTitaniumWorkflowStage(state.stage);
+				if (nextStage && this.isTitaniumWorkflowContinueRequest(normalizedMessage, nextStage)) {
+					state.stage = nextStage;
+					state.phase = 'planning';
+					await this.runTitaniumWorkflowPlan(state, progress, false);
+					return true;
+				}
+			}
+		}
+
+		if (!normalizedMessage.includes(TITANIUM_WORKFLOW_TRIGGER)) {
+			return false;
+		}
+
+		const targetRoot = this.getTitaniumWorkflowTargetRoot();
+		if (!targetRoot) {
+			progress({
+				kind: 'warning',
+				content: new MarkdownString('当前没有打开工作区文件夹，无法创建 v0-v3 独立站项目。')
+			});
+			return true;
+		}
+
+		const nextState: ITitaniumWorkflowState = {
+			stage: 'v0',
+			phase: 'planning',
+			targetRoot,
+			lastUserMessage: request.message
+		};
+		this.titaniumWorkflowStates.set(request.sessionResource, nextState);
+		await this.runTitaniumWorkflowPlan(nextState, progress, false);
+		return true;
+	}
+
+	private async runTitaniumWorkflowPlan(state: ITitaniumWorkflowState, progress: (part: IChatProgress) => void, isRevision: boolean): Promise<void> {
+		const config = TITANIUM_WORKFLOW_STAGES[state.stage];
+		state.phase = 'planning';
+
+		progress({
+			kind: 'progressMessage',
+			content: new MarkdownString(isRevision ? `正在重新整理 ${state.stage} 的实现计划。` : `正在分析 ${state.stage} 阶段需求并检查实现边界。`),
+			shimmer: true
+		});
+		await timeout(TITANIUM_WORKFLOW_PROGRESS_DELAY);
+
+		progress({
+			kind: 'markdownContent',
+			content: new MarkdownString([
+				`## ${config.title}`,
+				'',
+				config.planIntro,
+				'',
+				'我会先按真实 AI 编程流程推进：检查现有项目和素材，确认方案，再打开关键文件逐步写入代码。',
+				'',
+				'请确认本阶段方向：',
+				'',
+				...config.options.flatMap((option, index) => [
+					`${index + 1}. ${option.title}`,
+					option.body,
+					''
+				]),
+				`推荐选择：${config.recommendedSelection}`,
+				'',
+				'你可以直接回复“使用推荐方案并开始”，我会进入编码阶段。'
+			].join('\n'))
+		});
+
+		state.phase = 'ready';
+	}
+
+	private async runTitaniumWorkflowStage(state: ITitaniumWorkflowState, progress: (part: IChatProgress) => void): Promise<void> {
+		const config = TITANIUM_WORKFLOW_STAGES[state.stage];
+		const sourceStageRoot = URI.joinPath(URI.file(TITANIUM_WORKFLOW_SOURCE_ROOT), state.stage);
+		const targetStageRoot = URI.joinPath(state.targetRoot, state.stage);
+
+		if (!await this.fileService.exists(sourceStageRoot)) {
+			progress({
+				kind: 'warning',
+				content: new MarkdownString('当前缺少本轮演示所需的本地材料，无法继续生成该阶段。')
+			});
+			state.phase = 'ready';
+			return;
+		}
+
+		progress({
+			kind: 'progressMessage',
+			content: new MarkdownString(config.checkMessage),
+			shimmer: true
+		});
+		await timeout(TITANIUM_WORKFLOW_PROGRESS_DELAY);
+
+		const inspectionSummary = await this.createTitaniumWorkflowInspectionSummary(state.stage);
+		if (inspectionSummary) {
+			progress({
+				kind: 'markdownContent',
+				content: new MarkdownString(inspectionSummary)
+			});
+			await timeout(TITANIUM_WORKFLOW_PROGRESS_DELAY);
+		}
+
+		progress({
+			kind: 'progressMessage',
+			content: new MarkdownString(config.codingMessage),
+			shimmer: true
+		});
+		await this.materializeTitaniumWorkflowStage(sourceStageRoot, targetStageRoot);
+
+		for (const streamedFile of config.streamedFiles) {
+			const sourceFile = URI.joinPath(sourceStageRoot, ...streamedFile.relativePath.split('/'));
+			const targetFile = URI.joinPath(targetStageRoot, ...streamedFile.relativePath.split('/'));
+			if (await this.fileService.exists(sourceFile)) {
+				const content = await this.readTitaniumWorkflowFile(sourceFile);
+				await this.streamTitaniumWorkflowFile(targetFile, content, streamedFile.label, streamedFile.language, streamedFile.message, progress);
+			}
+		}
+
+		progress({
+			kind: 'progressMessage',
+			content: new MarkdownString('正在检查页面结构、关键资源路径和本地预览入口。'),
+			shimmer: true
+		});
+		await timeout(TITANIUM_WORKFLOW_PROGRESS_DELAY);
+
+		progress({
+			kind: 'treeData',
+			treeData: await this.createTitaniumWorkflowTreeData(targetStageRoot)
+		});
+
+		progress({
+			kind: 'markdownContent',
+			content: new MarkdownString([
+				config.doneMessage,
+				'',
+				`阶段目录：\`${TITANIUM_WORKFLOW_DIR}/${state.stage}\``,
+				this.getNextTitaniumWorkflowStage(state.stage)
+					? `下一步可以继续进入 \`${this.getNextTitaniumWorkflowStage(state.stage)}\`。`
+					: 'v0-v3 教学演示流程已经完整结束。'
+			].join('\n'))
+		});
+
+		state.phase = 'done';
+	}
+
+	private getTitaniumWorkflowTargetRoot(): URI | undefined {
+		const workspaceFolder = this.workspaceContextService.getWorkspace().folders[0];
+		if (!workspaceFolder) {
+			return undefined;
+		}
+
+		const folderName = workspaceFolder.uri.path.split('/').at(-1);
+		return folderName === TITANIUM_WORKFLOW_DIR
+			? workspaceFolder.uri
+			: URI.joinPath(workspaceFolder.uri, TITANIUM_WORKFLOW_DIR);
+	}
+
+	private normalizeTitaniumWorkflowMessage(message: string): string {
+		return message.toLowerCase().replace(/[\s,，。.!！?？:：;；'"`~]+/g, '');
+	}
+
+	private isTitaniumWorkflowStartRequest(normalizedMessage: string): boolean {
+		return normalizedMessage.includes('使用推荐方案并开始')
+			|| normalizedMessage.includes('推荐方案并开始')
+			|| normalizedMessage.includes('按推荐开始')
+			|| normalizedMessage.includes('开始')
+			|| normalizedMessage.includes('确认');
+	}
+
+	private isTitaniumWorkflowPlanReplayRequest(normalizedMessage: string): boolean {
+		return normalizedMessage.includes('重新查看') || normalizedMessage.includes('重看计划');
+	}
+
+	private isTitaniumWorkflowContinueRequest(normalizedMessage: string, nextStage: TitaniumWorkflowStage): boolean {
+		return normalizedMessage.includes('继续') || normalizedMessage.includes(`做${nextStage}`) || normalizedMessage.includes(nextStage);
+	}
+
+	private getRequestedTitaniumWorkflowStage(normalizedMessage: string): TitaniumWorkflowStage | undefined {
+		return TITANIUM_WORKFLOW_STAGE_ORDER.find(stage => normalizedMessage.includes(stage));
+	}
+
+	private getNextTitaniumWorkflowStage(stage: TitaniumWorkflowStage): TitaniumWorkflowStage | undefined {
+		const index = TITANIUM_WORKFLOW_STAGE_ORDER.indexOf(stage);
+		return TITANIUM_WORKFLOW_STAGE_ORDER[index + 1];
+	}
+
+	private async createTitaniumWorkflowInspectionSummary(stage: TitaniumWorkflowStage): Promise<string> {
+		if (stage === 'v0') {
+			return [
+				'检查结果：',
+				'- 已确认本阶段只建立工程基础，不进入完整商品页。',
+				'- 技术栈会为后续图片、视频、OBJ/MTL 3D 和英文客服预留空间。'
+			].join('\n');
+		}
+
+		if (stage === 'v1' || stage === 'v2') {
+			const assetsRoot = URI.joinPath(URI.file(TITANIUM_WORKFLOW_SOURCE_ROOT), 'assets', 'products');
+			const mediaNames = await this.listTitaniumWorkflowChildNames(assetsRoot, child => child.isFile && /\.(jpg|jpeg|png|webp|mp4)$/i.test(child.name));
+			const shownNames = mediaNames.slice(0, 10);
+			return [
+				'检查结果：',
+				`- 已确认可用产品素材 ${mediaNames.length} 个。`,
+				shownNames.length ? `- 代表素材：${shownNames.map(name => `\`${name}\``).join('、')}` : '- 当前未发现可用图片或视频素材。',
+				stage === 'v1'
+					? '- 本阶段保持基础商品页范围，不加入视频、3D 或客服。'
+					: '- 本阶段会使用图片和视频增强品牌媒体表达，但不加入 3D 或客服。'
+			].join('\n');
+		}
+
+		const modelRoot = URI.joinPath(URI.file(TITANIUM_WORKFLOW_SOURCE_ROOT), 'assets', 'products', 'model', 'person-cup');
+		const modelNames = await this.listTitaniumWorkflowChildNames(modelRoot, child => child.isFile && /\.(obj|mtl|png)$/i.test(child.name));
+		return [
+			'检查结果：',
+			'- 已确认真实 3D 模型素材。',
+			...modelNames.map(name => `- \`${name}\``),
+			'- 本阶段会保留原始 OBJ/MTL/贴图，不压缩、不转 GLB、不替换模型。'
+		].join('\n');
+	}
+
+	private async listTitaniumWorkflowChildNames(resource: URI, predicate: (child: IFileStat) => boolean): Promise<string[]> {
+		if (!await this.fileService.exists(resource)) {
+			return [];
+		}
+
+		const stat = await this.fileService.resolve(resource);
+		return (stat.children ?? [])
+			.filter(predicate)
+			.map(child => child.name)
+			.sort((a, b) => a.localeCompare(b));
+	}
+
+	private async materializeTitaniumWorkflowStage(source: URI, target: URI): Promise<void> {
+		await this.ensureTitaniumWorkflowFolder(target);
+		await this.materializeTitaniumWorkflowDirectory(source, target);
+	}
+
+	private async materializeTitaniumWorkflowDirectory(source: URI, target: URI): Promise<void> {
+		const sourceStat = await this.fileService.resolve(source);
+		for (const child of sourceStat.children ?? []) {
+			if (TITANIUM_WORKFLOW_IGNORED_NAMES.has(child.name)) {
+				continue;
+			}
+
+			const targetChild = URI.joinPath(target, child.name);
+			if (child.isDirectory) {
+				await this.ensureTitaniumWorkflowFolder(targetChild);
+				await this.materializeTitaniumWorkflowDirectory(child.resource, targetChild);
+			} else if (child.isFile) {
+				await this.ensureTitaniumWorkflowFolder(this.getTitaniumWorkflowParent(targetChild));
+				const content = await this.fileService.readFile(child.resource);
+				await this.fileService.writeFile(targetChild, content.value);
+			}
+		}
+	}
+
+	private async ensureTitaniumWorkflowFolder(resource: URI): Promise<void> {
+		if (await this.fileService.exists(resource)) {
+			return;
+		}
+
+		const parent = this.getTitaniumWorkflowParent(resource);
+		if (parent.toString() !== resource.toString() && !await this.fileService.exists(parent)) {
+			await this.ensureTitaniumWorkflowFolder(parent);
+		}
+
+		await this.fileService.createFolder(resource);
+	}
+
+	private getTitaniumWorkflowParent(resource: URI): URI {
+		const segments = resource.path.split('/').filter(Boolean);
+		if (segments.length <= 1) {
+			return resource;
+		}
+
+		const parentPath = segments.slice(0, -1).join('/');
+		const prefix = resource.path.startsWith('/') ? '/' : '';
+		return resource.with({ path: `${prefix}${parentPath}` });
+	}
+
+	private async readTitaniumWorkflowFile(resource: URI): Promise<string> {
+		const content = await this.fileService.readFile(resource);
+		return content.value.toString();
+	}
+
+	private async streamTitaniumWorkflowFile(resource: URI, content: string, label: string, language: string, message: string, progress: (part: IChatProgress) => void): Promise<void> {
+		progress({
+			kind: 'progressMessage',
+			content: new MarkdownString(message),
+			shimmer: true
+		});
+
+		await this.openTitaniumWorkflowEditor(resource);
+		const frameDelays = this.createTitaniumWorkflowFrameDelays(TITANIUM_WORKFLOW_SECTION_DELAY, TITANIUM_WORKFLOW_STREAM_FRAMES);
+		for (let index = 1; index <= TITANIUM_WORKFLOW_STREAM_FRAMES; index++) {
+			const partialContent = this.takeTitaniumWorkflowChunk(content, index, TITANIUM_WORKFLOW_STREAM_FRAMES);
+			await this.fileService.writeFile(resource, VSBuffer.fromString(partialContent));
+			await this.openTitaniumWorkflowEditorAtEnd(resource, partialContent);
+			await timeout(frameDelays[index - 1]);
+		}
+
+		progress({
+			kind: 'markdownContent',
+			content: new MarkdownString(`已完成 \`${label}\`。`)
+		});
+	}
+
+	private createTitaniumWorkflowFrameDelays(totalDelay: number, frames: number): number[] {
+		const delays: number[] = [];
+		let assigned = 0;
+
+		for (let index = 0; index < frames; index++) {
+			const delay = Math.max(120, Math.round(totalDelay / frames));
+			delays.push(delay);
+			assigned += delay;
+		}
+
+		delays[delays.length - 1] += totalDelay - assigned;
+		return delays;
+	}
+
+	private takeTitaniumWorkflowChunk(content: string, index: number, total: number): string {
+		const normalizedContent = content.replace(/\r\n/g, '\n');
+		const targetLength = Math.max(1, Math.min(normalizedContent.length, Math.ceil(normalizedContent.length * (index / total))));
+		if (targetLength >= normalizedContent.length) {
+			return normalizedContent;
+		}
+
+		const lookahead = Math.min(normalizedContent.length, targetLength + 80);
+		for (let cursor = targetLength; cursor < lookahead; cursor++) {
+			const currentChar = normalizedContent[cursor];
+			if (currentChar === '\n' || currentChar === '>' || currentChar === ' ') {
+				return normalizedContent.slice(0, cursor + 1);
+			}
+		}
+
+		return normalizedContent.slice(0, targetLength);
+	}
+
+	private async openTitaniumWorkflowEditor(resource: URI): Promise<void> {
+		await this.editorService.openEditor({
+			resource,
+			options: {
+				preserveFocus: false,
+				revealIfOpened: true,
+				pinned: true
+			}
+		});
+	}
+
+	private async openTitaniumWorkflowEditorAtEnd(resource: URI, content: string): Promise<void> {
+		const position = this.createTitaniumWorkflowPosition(content, content.length);
+		await this.editorService.openEditor({
+			resource,
+			options: {
+				preserveFocus: false,
+				revealIfOpened: true,
+				pinned: true,
+				selection: {
+					startLineNumber: position.lineNumber,
+					startColumn: position.column,
+					endLineNumber: position.lineNumber,
+					endColumn: position.column
+				}
+			}
+		});
+	}
+
+	private createTitaniumWorkflowPosition(content: string, offset: number): { lineNumber: number; column: number } {
+		let lineNumber = 1;
+		let column = 1;
+		for (let index = 0; index < offset; index++) {
+			if (content.charCodeAt(index) === 10) {
+				lineNumber++;
+				column = 1;
+			} else {
+				column++;
+			}
+		}
+
+		return { lineNumber, column };
+	}
+
+	private async createTitaniumWorkflowTreeData(stageRoot: URI): Promise<IChatResponseProgressFileTreeData> {
+		const children = await this.createTitaniumWorkflowTreeChildren(stageRoot, 0);
+		return {
+			label: stageRoot.path.split('/').at(-1) ?? 'stage',
+			uri: stageRoot,
+			children
+		};
+	}
+
+	private async createTitaniumWorkflowTreeChildren(resource: URI, depth: number): Promise<IChatResponseProgressFileTreeData[]> {
+		if (depth > 2 || !await this.fileService.exists(resource)) {
+			return [];
+		}
+
+		const stat = await this.fileService.resolve(resource);
+		const children = (stat.children ?? [])
+			.filter(child => !TITANIUM_WORKFLOW_IGNORED_NAMES.has(child.name))
+			.sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.name.localeCompare(b.name))
+			.slice(0, depth === 0 ? 10 : 8);
+
+		const treeItems: IChatResponseProgressFileTreeData[] = [];
+		for (const child of children) {
+			treeItems.push({
+				label: child.name,
+				uri: child.resource,
+				children: child.isDirectory ? await this.createTitaniumWorkflowTreeChildren(child.resource, depth + 1) : undefined
+			});
+		}
+
+		return treeItems;
 	}
 
 	private replaceAgentInRequestModel(requestModel: IChatRequestModel, chatAgentService: IChatAgentService): IChatRequestModel {
