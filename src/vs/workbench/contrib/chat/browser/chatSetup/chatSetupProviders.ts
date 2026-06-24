@@ -291,7 +291,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			slashCommands: [],
 			disambiguation: [],
 			locations: [location],
-			metadata: { helpTextPrefix: SetupAgent.SETUP_NEEDED_MESSAGE },
+			metadata: {},
 			description,
 			extensionId: nullExtensionDescription.identifier,
 			extensionVersion: undefined,
@@ -308,7 +308,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		return { agent, disposable: disposables };
 	}
 
-	private static readonly SETUP_NEEDED_MESSAGE = new MarkdownString(localize('settingUpCopilotNeeded', "You need to set up GitHub Copilot and be signed in to use Chat."));
+	private static readonly DEMO_READY_MESSAGE = new MarkdownString('当前是 AI 编程教学演示模式，不需要登录 GitHub Copilot。请输入 `v0-v3` 或 `v0` 开始钛杯独立站流程。');
 	private static readonly TRUST_NEEDED_MESSAGE = new MarkdownString(localize('trustNeeded', "You need to trust this workspace to use Chat."));
 	private static readonly CHAT_RETRY_COMMAND_ID = 'workbench.action.chat.retrySetup';
 	private static readonly CHAT_SHOW_OUTPUT_COMMAND_ID = 'workbench.action.chat.showOutput';
@@ -830,7 +830,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		) {
 			progress({
 				kind: 'markdownContent',
-				content: this.workspaceTrustManagementService.isWorkspaceTrusted() ? SetupAgent.SETUP_NEEDED_MESSAGE : SetupAgent.TRUST_NEEDED_MESSAGE
+				content: this.workspaceTrustManagementService.isWorkspaceTrusted() ? SetupAgent.DEMO_READY_MESSAGE : SetupAgent.TRUST_NEEDED_MESSAGE
 			});
 
 			return {};
@@ -893,7 +893,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		else {
 			progress({
 				kind: 'markdownContent',
-				content: this.workspaceTrustManagementService.isWorkspaceTrusted() ? SetupAgent.SETUP_NEEDED_MESSAGE : SetupAgent.TRUST_NEEDED_MESSAGE
+				content: this.workspaceTrustManagementService.isWorkspaceTrusted() ? SetupAgent.DEMO_READY_MESSAGE : SetupAgent.TRUST_NEEDED_MESSAGE
 			});
 		}
 
@@ -977,7 +977,8 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			}
 		}
 
-		if (!normalizedMessage.includes(TITANIUM_WORKFLOW_TRIGGER)) {
+		const initialStage = this.getRequestedTitaniumWorkflowStage(normalizedMessage) ?? 'v0';
+		if (!normalizedMessage.includes(TITANIUM_WORKFLOW_TRIGGER) && !this.isTitaniumWorkflowStageOnlyRequest(normalizedMessage)) {
 			return false;
 		}
 
@@ -991,7 +992,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		}
 
 		const nextState: ITitaniumWorkflowState = {
-			stage: 'v0',
+			stage: initialStage,
 			phase: 'planning',
 			targetRoot,
 			lastUserMessage: request.message
@@ -1140,6 +1141,10 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 
 	private isTitaniumWorkflowContinueRequest(normalizedMessage: string, nextStage: TitaniumWorkflowStage): boolean {
 		return normalizedMessage.includes('继续') || normalizedMessage.includes(`做${nextStage}`) || normalizedMessage.includes(nextStage);
+	}
+
+	private isTitaniumWorkflowStageOnlyRequest(normalizedMessage: string): boolean {
+		return TITANIUM_WORKFLOW_STAGE_ORDER.some(stage => normalizedMessage === stage || normalizedMessage === `做${stage}` || normalizedMessage === `开始${stage}`);
 	}
 
 	private getRequestedTitaniumWorkflowStage(normalizedMessage: string): TitaniumWorkflowStage | undefined {
