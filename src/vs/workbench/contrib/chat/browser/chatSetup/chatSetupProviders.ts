@@ -95,6 +95,7 @@ interface ITitaniumWorkflowStageConfig {
 	readonly doneMessage: string;
 	readonly recommendedSelection: string;
 	readonly options: readonly { readonly title: string; readonly body: string }[];
+	readonly requirementDraft?: readonly string[];
 	readonly streamedFiles: readonly { readonly relativePath: string; readonly label: string; readonly language: string; readonly message: string }[];
 }
 
@@ -112,16 +113,27 @@ const TITANIUM_WORKFLOW_STAGES: Record<TitaniumWorkflowStage, ITitaniumWorkflowS
 		stage: 'v0',
 		promptFile: 'V0_PROMPT.md',
 		title: 'v0 技术选型与项目初始化',
-		planIntro: '我会先把这个独立站的工程基础定清楚。当前阶段只做技术栈、目录结构和最小可运行项目，不进入商品页设计。',
+		planIntro: '我会先帮你确定这个独立站的工程基础。考虑到后续可能加入产品图片、视频、真实 OBJ/MTL 3D 模型和客服功能，建议优先选择可扩展的前端技术栈。',
 		checkMessage: '正在确认 Node.js 前端工程结构、基础配置和后续 3D 能力预留。',
 		codingMessage: '正在创建 Next.js / React / TypeScript / Tailwind 工程基础。',
 		doneMessage: 'v0 工程基础已经完成：项目可以继续承接图片、视频、真实 3D 模型和客服能力。',
 		recommendedSelection: '前端框架 A，样式方案 A，3D 技术预留 A，编程语言 A，包管理工具 A，基础文件 C',
 		options: [
-			{ title: '前端框架', body: 'A. Next.js + React；B. Vite + React；C. 原生 HTML/CSS/JS' },
-			{ title: '样式方案', body: 'A. Tailwind CSS；B. CSS Modules；C. 普通全局 CSS' },
-			{ title: '3D 技术预留', body: 'A. Babylon.js；B. Three.js；C. 暂不安装 3D 依赖' },
-			{ title: '语言与工具', body: 'A. TypeScript + npm；B. JavaScript + npm；C. TypeScript + pnpm' }
+			{ title: '前端框架', body: 'A. Next.js + React：适合独立站、产品展示、静态资源管理和后续扩展\nB. Vite + React：更轻量，适合纯前端展示页\nC. 原生 HTML/CSS/JS：最简单，但后续扩展 3D 和客服会更吃力' },
+			{ title: '样式方案', body: 'A. Tailwind CSS：适合快速构建响应式品牌页\nB. CSS Modules：结构清晰，但开发速度较慢\nC. 普通全局 CSS：简单直接，但大型页面维护性较弱' },
+			{ title: '3D 技术预留', body: 'A. Babylon.js：适合加载 OBJ/MTL/贴图并制作交互式 3D 查看器\nB. Three.js：生态广，但 OBJ/MTL 材质细节需要更多手动处理\nC. 暂不安装 3D 依赖，等真正需要 3D 功能时再接入' },
+			{ title: '编程语言', body: 'A. TypeScript：适合长期维护和复杂组件\nB. JavaScript：更简单，但大型项目可维护性较弱' },
+			{ title: '包管理工具', body: 'A. npm：Node.js 默认工具链，兼容性最好\nB. pnpm：速度快，但需要确认本地环境' },
+			{ title: 'v0 基础文件', body: 'A. 只生成最小 Next.js 项目\nB. 生成 Next.js 项目 + public/products 资源目录\nC. 生成 Next.js 项目 + public/products + 基础项目说明文档' }
+		],
+		requirementDraft: [
+			'项目定位：面向海外用户的纯钛杯英文独立站工程基础。',
+			'当前阶段：只完成 v0 技术选型与项目初始化，不做完整商品页。',
+			'推荐技术栈：Node.js、Next.js、React、TypeScript、Tailwind CSS、Babylon.js、Babylon.js Loaders、npm。',
+			'目录目标：建立可持续迭代的 App Router 项目结构，并预留 public/products 资源目录。',
+			'基础文件：package.json、package-lock.json、next.config.ts、tsconfig.json、postcss.config.mjs、eslint.config.mjs、next-env.d.ts、src/app/page.tsx、src/app/layout.tsx、src/app/globals.css、public/products/、README.md。',
+			'明确不做：不制作完整商品首页，不接入真实产品图片，不处理视频，不加载 3D 模型，不添加智能客服，不做复杂品牌视觉、购买按钮、产品矩阵和场景模块。',
+			'完成标准：可以安装依赖并通过 npm run dev 启动，首页只保留最小占位页面，工程结构能支撑后续图片、视频、3D 和客服功能。'
 		],
 		streamedFiles: [
 			{ relativePath: 'titanium-cup-showcase/package.json', label: '项目依赖', language: 'json', message: '正在写入项目依赖和开发脚本。' },
@@ -1015,27 +1027,44 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 
 		progress({
 			kind: 'markdownContent',
-			content: new MarkdownString([
-				`## ${config.title}`,
-				'',
-				config.planIntro,
-				'',
-				'我会先按真实 AI 编程流程推进：检查现有项目和素材，确认方案，再打开关键文件逐步写入代码。',
-				'',
-				'请确认本阶段方向：',
-				'',
-				...config.options.flatMap((option, index) => [
-					`${index + 1}. ${option.title}`,
-					option.body,
-					''
-				]),
-				`推荐选择：${config.recommendedSelection}`,
-				'',
-				'你可以直接回复“使用推荐方案并开始”，我会进入编码阶段。'
-			].join('\n'))
+			content: new MarkdownString(this.createTitaniumWorkflowPlanMarkdown(config))
 		});
 
 		state.phase = 'ready';
+	}
+
+	private createTitaniumWorkflowPlanMarkdown(config: ITitaniumWorkflowStageConfig): string {
+		const lines: string[] = [
+			`## ${config.title}`,
+			'',
+			config.planIntro,
+			'',
+			'我先不写代码，先把需求边界、技术选择和初始化方案确认清楚。请你从下面的选项里选择，或者直接采用推荐组合。',
+			'',
+			'### 需要确认的方案',
+			''
+		];
+
+		for (const [index, option] of config.options.entries()) {
+			lines.push(`${index + 1}. ${option.title}`);
+			lines.push(option.body);
+			lines.push('');
+		}
+
+		lines.push('### 推荐选择');
+		lines.push(config.recommendedSelection);
+		lines.push('');
+
+		if (config.requirementDraft?.length) {
+			lines.push('### 待确认需求文档');
+			for (const item of config.requirementDraft) {
+				lines.push(`- ${item}`);
+			}
+			lines.push('');
+		}
+
+		lines.push('如果你认可这个方案，可以回复“使用推荐方案并开始”。我会根据这份需求文档进入编码阶段，先检查项目和资源，再打开关键文件逐步写入代码。');
+		return lines.join('\n');
 	}
 
 	private async runTitaniumWorkflowStage(state: ITitaniumWorkflowState, progress: (part: IChatProgress) => void): Promise<void> {
