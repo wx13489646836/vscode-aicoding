@@ -32,10 +32,6 @@ if not exist "%CODE_EXE%" (
     "}" >>"%BOOTSTRAP_LOG%" 2>&1
 )
 
-if exist "%CODE_EXE%" (
-  set "VSCODE_SKIP_PRELAUNCH=1"
-)
-
 echo ==== %date% %time% ====>>"%VSCODE_DEV_LOG%"
 echo Starting VS Code dev from %cd%>>"%VSCODE_DEV_LOG%"
 if exist "%CODE_EXE%" echo Using cached Electron at "%CODE_EXE%">>"%VSCODE_DEV_LOG%"
