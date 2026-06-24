@@ -391,6 +391,10 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 	}
 
 	private async doInvoke(request: IChatAgentRequest, progress: (part: IChatProgress) => void, chatService: IChatService, languageModelsService: ILanguageModelsService, chatWidgetService: IChatWidgetService, chatAgentService: IChatAgentService, languageModelToolsService: ILanguageModelToolsService, defaultAccountService: IDefaultAccountService): Promise<IChatAgentResult> {
+		if (await this.handleTitaniumWorkflowRequest(request, progress)) {
+			return {};
+		}
+
 		if (
 			!this.context.state.completed ||									// Setup not completed
 			this.context.state.disabled ||										// Extension disabled: run setup to enable
