@@ -46,6 +46,7 @@ dist
 
 # Local portable runtime and generated development artifacts
 .electron-cache/
+.portable-node/
 .portable-data/
 *.log
 .tmp-*
