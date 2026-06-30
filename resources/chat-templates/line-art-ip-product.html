@@ -476,10 +476,16 @@
       text-shadow: 0 0 24px rgba(255,255,255,0.12);
     }
 
-    .selection-grid,
-    .final-grid {
+    .selection-grid {
       grid-template-columns: repeat(4, 1fr);
       margin-top: 18px;
+    }
+
+    .final-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+      align-items: stretch;
     }
 
     .selection-card,
@@ -509,6 +515,24 @@
     .final-visual {
       min-height: 0;
       aspect-ratio: 1 / 1;
+    }
+
+    .final-card {
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.58);
+      box-shadow: 0 16px 34px rgba(72, 51, 36, 0.10);
+    }
+
+    .final-card .final-info {
+      min-height: 74px;
+      padding: 12px 14px 14px;
+      background: rgba(255, 252, 247, 0.9);
+    }
+
+    .final-card .final-info strong {
+      display: block;
+      font-size: 14px;
+      line-height: 1.35;
     }
 
     .poster-tab .poster-visual {
@@ -632,7 +656,23 @@
 
     .poster-visual.empty,
     .final-visual.empty {
-      background: rgba(255, 255, 255, 0.42) !important;
+      background:
+        linear-gradient(135deg, rgba(191, 91, 49, 0.08), rgba(47, 110, 103, 0.08)),
+        rgba(255, 255, 255, 0.5) !important;
+    }
+
+    .final-visual.empty::after {
+      content: "待生成";
+      position: absolute;
+      left: 14px;
+      bottom: 14px;
+      z-index: 1;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
     }
 
     .is-loading {
@@ -758,8 +798,8 @@
       .poster-layout,
       .export-layout { grid-template-columns: 1fr; }
 
-      .selection-grid,
-      .final-grid { grid-template-columns: repeat(2, 1fr); }
+      .selection-grid { grid-template-columns: repeat(2, 1fr); }
+      .final-grid { grid-template-columns: repeat(3, 1fr); }
       .step-tracker { grid-template-columns: 1fr 1fr; }
     }
 
@@ -769,15 +809,19 @@
       .poster-stage,
       .step-tracker,
       .selection-grid,
-      .final-grid,
       .progress-rail,
       .asset-strip,
       .preview-grid,
       .form-grid { grid-template-columns: 1fr; }
+      .final-grid { grid-template-columns: repeat(2, 1fr); }
       .section,
       .hero-main,
       .footer-note { padding: 20px; }
       .section-head h3 { font-size: 24px; }
+    }
+
+    @media (max-width: 520px) {
+      .final-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -973,11 +1017,11 @@
       </div>
 
       <div class="final-grid" id="finalGrid">
-        <article class="final-card" data-id="终稿 01"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong></strong><div class="muted"></div></div></article>
-        <article class="final-card" data-id="终稿 02"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong></strong><div class="muted"></div></div></article>
-        <article class="final-card" data-id="终稿 03"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong></strong><div class="muted"></div></div></article>
-        <article class="final-card" data-id="终稿 04"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong></strong><div class="muted"></div></div></article>
-        <article class="final-card" data-id="终稿 05"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong></strong><div class="muted"></div></div></article>
+        <article class="final-card" data-id="终稿 01"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 01</strong><div class="muted">等待生成</div></div></article>
+        <article class="final-card" data-id="终稿 02"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 02</strong><div class="muted">等待生成</div></div></article>
+        <article class="final-card" data-id="终稿 03"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 03</strong><div class="muted">等待生成</div></div></article>
+        <article class="final-card" data-id="终稿 04"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 04</strong><div class="muted">等待生成</div></div></article>
+        <article class="final-card" data-id="终稿 05"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 05</strong><div class="muted">等待生成</div></div></article>
       </div>
 
       <div class="export-layout">
