@@ -34,12 +34,12 @@ set "PUPPETEER_SKIP_DOWNLOAD=1"
 set "EDGEWEBDRIVER_SKIP_DOWNLOAD=1"
 set "GECKODRIVER_SKIP_DOWNLOAD=1"
 
-call :run_step "[1/6] Checking required tools..." "where node"
+call :run_step "[1/7] Checking required tools..." "where node"
 if errorlevel 1 goto :fail
 call :run_step "" "where npm"
 if errorlevel 1 goto :fail
 
-call :run_step "[2/6] Checking Node.js version..." "node --version"
+call :run_step "[2/7] Checking Node.js version..." "node --version"
 if errorlevel 1 goto :fail
 call :check_node_version
 if errorlevel 1 goto :fail
@@ -50,34 +50,40 @@ call :check_dependency_state
 if defined FORCE_INSTALL set "NEED_INSTALL=1"
 
 if defined NEED_INSTALL (
-	call :run_step "[3/6] Installing npm dependencies..." "npm install"
+	call :run_step "[3/7] Installing npm dependencies..." "npm install"
 	if errorlevel 1 goto :fail
 ) else (
-	echo [3/6] Reusing complete node_modules.
-	>>"%LOG_FILE%" echo [3/6] Reusing complete node_modules.
+	echo [3/7] Reusing complete node_modules.
+	>>"%LOG_FILE%" echo [3/7] Reusing complete node_modules.
 )
 
 call :verify_native_modules
 if errorlevel 1 (
-	call :run_step "[4/6] Rebuilding native modules..." "npm rebuild native-keymap @vscode/sqlite3 @vscode/native-watchdog --build-from-source"
+	call :run_step "[4/7] Rebuilding native modules..." "npm rebuild native-keymap @vscode/sqlite3 @vscode/native-watchdog --build-from-source"
 	if errorlevel 1 goto :fail
 	call :verify_native_modules
 	if errorlevel 1 goto :fail
 ) else (
-	echo [4/6] Native modules are ready.
-	>>"%LOG_FILE%" echo [4/6] Native modules are ready.
+	echo [4/7] Native modules are ready.
+	>>"%LOG_FILE%" echo [4/7] Native modules are ready.
 )
 
+call :ensure_codicons
+if errorlevel 1 goto :fail
+
 if exist "out" (
-	echo [5/6] Reusing existing out directory.
-	>>"%LOG_FILE%" echo [5/6] Reusing existing out directory.
+	echo [6/7] Reusing existing out directory.
+	>>"%LOG_FILE%" echo [6/7] Reusing existing out directory.
 ) else (
-	call :run_step "[5/6] Transpiling client sources..." "npm run transpile-client"
+	call :run_step "[6/7] Transpiling client sources..." "npm run transpile-client"
 	if errorlevel 1 goto :fail
 )
 
-echo [6/6] Verifying Electron bootstrap...
->>"%LOG_FILE%" echo [6/6] Verifying Electron bootstrap...
+call :ensure_codicons
+if errorlevel 1 goto :fail
+
+echo [7/7] Verifying Electron bootstrap...
+>>"%LOG_FILE%" echo [7/7] Verifying Electron bootstrap...
 if not exist ".build\electron\Code - OSS.exe" (
 	call :run_step "" "npm run electron"
 	if errorlevel 1 goto :fail
@@ -146,6 +152,24 @@ if defined MISSING_NATIVE (
 	echo Native module output is missing.
 	>>"%LOG_FILE%" echo Native module output is missing.
 	exit /b 1
+)
+exit /b 0
+
+:ensure_codicons
+echo [5/7] Ensuring VS Code icon font...
+>>"%LOG_FILE%" echo [5/7] Ensuring VS Code icon font...
+if not exist "node_modules\@vscode\codicons\dist\codicon.ttf" (
+	echo Missing node_modules\@vscode\codicons\dist\codicon.ttf.
+	>>"%LOG_FILE%" echo Missing node_modules\@vscode\codicons\dist\codicon.ttf.
+	exit /b 1
+)
+if not exist "src\vs\base\browser\ui\codicons\codicon" mkdir "src\vs\base\browser\ui\codicons\codicon"
+copy /Y "node_modules\@vscode\codicons\dist\codicon.ttf" "src\vs\base\browser\ui\codicons\codicon\codicon.ttf" >>"%LOG_FILE%" 2>&1
+if errorlevel 1 exit /b 1
+if exist "out" (
+	if not exist "out\vs\base\browser\ui\codicons\codicon" mkdir "out\vs\base\browser\ui\codicons\codicon"
+	copy /Y "node_modules\@vscode\codicons\dist\codicon.ttf" "out\vs\base\browser\ui\codicons\codicon\codicon.ttf" >>"%LOG_FILE%" 2>&1
+	if errorlevel 1 exit /b 1
 )
 exit /b 0
 
