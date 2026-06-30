@@ -161,6 +161,7 @@ export const copyrightFilter = Object.freeze<string[]>([
 	'!**/*.md',
 	'!**/*.bat',
 	'!**/*.cmd',
+	'!**/*.iss',
 	'!**/*.ico',
 	'!**/*.opus',
 	'!**/*.mp3',
