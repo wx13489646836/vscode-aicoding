@@ -960,7 +960,7 @@
       </div>
 
       <div class="cta-row" style="margin-top:18px">
-        <button class="primary-button" type="button" id="confirmPoster">根据已选方案生成 4 张终稿</button>
+        <button class="primary-button" type="button" id="confirmPoster">根据已选方案生成 5 张终稿</button>
       </div>
     </section>
 
@@ -977,6 +977,7 @@
         <article class="final-card" data-id="终稿 02"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong></strong><div class="muted"></div></div></article>
         <article class="final-card" data-id="终稿 03"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong></strong><div class="muted"></div></div></article>
         <article class="final-card" data-id="终稿 04"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong></strong><div class="muted"></div></div></article>
+        <article class="final-card" data-id="终稿 05"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong></strong><div class="muted"></div></div></article>
       </div>
 
       <div class="export-layout">
@@ -1003,7 +1004,7 @@
     const FIXTURE_MANIFEST_PATH = "/external-fixtures/current/manifest.json";
     const TEXT_REVEAL_DELAY_MS = 15 * 1000;
     const IMAGE_REVEAL_DELAY_MS = 30 * 1000;
-    const FIXTURE_SLOT_COUNT = 4;
+    const FIXTURE_SLOT_COUNT = 5;
     const DEFAULT_CONFIG = {
       apiKey: "",
       apiHost: "",
@@ -1489,7 +1490,7 @@
 - prompt 必须明确要求沿用上一阶段已锁定的 IP 形象，不得改动角色动作与核心识别特征
 - prompt 必须是完整中文长提示词，不要写成关键词堆砌
 - 4 个方案之间要有明显构图差异`,
-        final: `你是品牌精修导演。基于已选海报方案输出 4 个终稿精修方向。
+        final: `你是品牌精修导演。基于已选海报方案输出 5 个终稿精修方向。
 返回 JSON，格式必须为 {"variants":[{"id":"终稿 01","title":"","badge":"","description":"","prompt":""}]}。
 只允许做微调级增强，不改变已选 IP 和构图逻辑。`
       };

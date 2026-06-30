@@ -102,7 +102,7 @@ const SCRIPTED_IP_LAUNCHER_FILE = 'start-preview.bat';
 const SCRIPTED_IP_PREVIEW_SERVER_FILE = 'preview_server.py';
 const SCRIPTED_IP_LAUNCHER_SUGGESTION_WORDS = ['配置一键预览脚本', '创建一键预览脚本', '配置启动脚本', '创建启动脚本', '配置预览工具', '创建预览工具'];
 const SCRIPTED_IP_FIXTURE_IP_IMAGE_FILES = ['ip-01.svg', 'ip-02.svg', 'ip-03.svg', 'ip-04.svg'] as const;
-const SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES = ['final-01.svg', 'final-02.svg', 'final-03.svg', 'final-04.svg'] as const;
+const SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES = ['final-01.svg', 'final-02.svg', 'final-03.svg', 'final-04.svg', 'final-05.svg'] as const;
 
 type ScriptedWorkflowPlanStep = 'scenario' | 'focus' | 'pace' | 'confirm';
 type ScriptedWorkflowScenarioOption = 'brandProposal' | 'commerceConversion' | 'launchShowcase';
@@ -1417,7 +1417,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				'- 上传区：素材上传、配置输入、生成入口。',
 				'- IP 构筑区：4 个候选 IP 方案与唯一 IP 确认动作。',
 				'- 海报方案区：4 个海报方案、提示词编辑、重生成入口。',
-				'- 终稿输出区：4 个终稿卡片、导出说明与最终导出动作。',
+				'- 终稿输出区：5 个终稿卡片、导出说明与最终导出动作。',
 				'',
 				selectedScenario ? `页面定位决定：${selectedScenario.impact}` : '页面定位暂未确定，所以我先保留三种路径的弹性空间。',
 				selectedFocus ? `展示重心决定：${selectedFocus.impact}` : '展示重心暂未确定，所以我先按均衡骨架做 plan 收敛。',
@@ -1950,7 +1950,8 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				{ id: '终稿 01', title: '终稿主推版', description: '主视觉完整、适合第一屏展示。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[0] },
 				{ id: '终稿 02', title: '终稿细节版', description: '更强调材质、结构与灯光精修。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[1] },
 				{ id: '终稿 03', title: '终稿传播版', description: '适合社媒与活动延展的成片表达。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[2] },
-				{ id: '终稿 04', title: '终稿陈列版', description: '适合线下展架与终端陈列展示。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[3] }
+				{ id: '终稿 04', title: '终稿陈列版', description: '适合线下展架与终端陈列展示。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[3] },
+				{ id: '终稿 05', title: '终稿延展版', description: '适合补充第五张横向延展与备选展示。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[4] }
 			]
 		}, null, 2) + '\n';
 	}
@@ -1962,7 +1963,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		}));
 		const finalAssets = SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES.map((filename, index) => ({
 			filename,
-			content: this.createScriptedWorkflowFixtureSvg(`Final ${String(index + 1).padStart(2, '0')}`, ['终稿主推', '终稿精修', '终稿传播', '终稿陈列'][index] ?? '终稿展示', ['#8F341C', '#2F6E67', '#805936', '#445A73'][index % 4] ?? '#8F341C')
+			content: this.createScriptedWorkflowFixtureSvg(`Final ${String(index + 1).padStart(2, '0')}`, ['终稿主推', '终稿精修', '终稿传播', '终稿陈列', '终稿延展'][index] ?? '终稿展示', ['#8F341C', '#2F6E67', '#805936', '#445A73', '#6A4A8A'][index % 5] ?? '#8F341C')
 		}));
 		return [...ipAssets, ...finalAssets];
 	}
