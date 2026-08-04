@@ -96,19 +96,20 @@ const SCRIPTED_IP_WORKFLOW_SECTION_TOTAL_DELAY = 5000;
 const SCRIPTED_IP_WORKFLOW_SECTION_UPDATES = 24;
 const SCRIPTED_IP_CONFIRMATION_WORDS = ['可以', '继续', '开始', '开始做', '按这个来', '确认', '没问题', '就这样', '开始创建', '按这个计划开始'];
 const SCRIPTED_IP_UI_FIX_WORDS = ['修复ui', '修复UI'];
+const SCRIPTED_IP_FEATURE_WORD = '功能';
 const SCRIPTED_IP_IMAGE_FIX_COMMAND = '优化图片上传策略：自动压缩到长边 1536 以内，并控制在 4MB 内';
 const SCRIPTED_IP_IMAGE_FIX_WORDS = [SCRIPTED_IP_IMAGE_FIX_COMMAND, '图片自动压缩到1536和4m以内', '凡事上传的图片都需要被你自动压缩到长边为1536以下，然后再压缩到4M以内'];
 const SCRIPTED_IP_LAUNCHER_FILE = 'start-preview.bat';
 const SCRIPTED_IP_PREVIEW_SERVER_FILE = 'preview_server.py';
 const SCRIPTED_IP_LAUNCHER_SUGGESTION_WORDS = ['配置一键预览脚本', '创建一键预览脚本', '配置启动脚本', '创建启动脚本', '配置预览工具', '创建预览工具'];
 const SCRIPTED_IP_FIXTURE_IP_IMAGE_FILES = ['ip-01.svg', 'ip-02.svg', 'ip-03.svg', 'ip-04.svg'] as const;
-const SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES = ['final-01.svg', 'final-02.svg', 'final-03.svg', 'final-04.svg', 'final-05.svg'] as const;
+const SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES = ['final-01.svg', 'final-02.svg', 'final-03.svg', 'final-04.svg'] as const;
 
 type ScriptedWorkflowPlanStep = 'scenario' | 'focus' | 'pace' | 'confirm';
 type ScriptedWorkflowScenarioOption = 'brandProposal' | 'commerceConversion' | 'launchShowcase';
 type ScriptedWorkflowFocusOption = 'ipFirst' | 'productFirst' | 'balanced';
 type ScriptedWorkflowPaceOption = 'standard' | 'detailed' | 'cinematic';
-type ScriptedWorkflowVersion = 'v1' | 'v2';
+type ScriptedWorkflowVersion = 'v1' | 'v2' | 'v3';
 
 interface IScriptedWorkflowPlanSelections {
 	scenario?: ScriptedWorkflowScenarioOption;
@@ -994,6 +995,15 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				];
 			}
 
+			if (state.workflowVersion === 'v2') {
+				return [
+					createFollowup('功能增强版', SCRIPTED_IP_FEATURE_WORD, '生成包含 IP 风格选择窗口的 v3。'),
+					state.launcherCreated
+						? createFollowup('继续优化页面', '继续优化页面', '继续补充页面动效、文案或结构。')
+						: createFollowup('配置一键预览脚本', '配置一键预览脚本', '生成 start-preview.bat，一键启动 Python 本地服务并打开页面。')
+				];
+			}
+
 			if (!state.launcherCreated) {
 				return [
 					createFollowup('配置一键预览脚本', '配置一键预览脚本', '生成 start-preview.bat，一键启动 Python 本地服务并打开页面。'),
@@ -1057,6 +1067,19 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 					await this.runScriptedWorkflow(this.reviveScriptedWorkflow(sessionState.targetDirectory), request.sessionResource, request.message, progress);
 					return true;
 				}
+			}
+
+			if (sessionState.workflowVersion === 'v2' && this.isScriptedWorkflowFeatureRequest(request.message)) {
+				sessionState.workflowVersion = 'v3';
+				sessionState.awaitingFixes = false;
+				sessionState.readyForSecondVersion = false;
+				sessionState.phase = 'scoping';
+				sessionState.fileCreated = false;
+				sessionState.treeShown = false;
+				sessionState.writeCompleted = false;
+				sessionState.launcherConfirmationPending = false;
+				await this.runScriptedWorkflow(this.reviveScriptedWorkflow(sessionState.targetDirectory), request.sessionResource, request.message, progress);
+				return true;
 			}
 
 			if (sessionState.launcherConfirmationPending && this.isScriptedWorkflowLauncherConfirmation(request.message)) {
@@ -1166,6 +1189,10 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 	private isScriptedWorkflowImageFixRequest(message: string): boolean {
 		const normalizedMessage = this.normalizeScriptedWorkflowMessage(message);
 		return normalizedMessage.includes('4mb') || SCRIPTED_IP_IMAGE_FIX_WORDS.some(word => normalizedMessage === this.normalizeScriptedWorkflowMessage(word));
+	}
+
+	private isScriptedWorkflowFeatureRequest(message: string): boolean {
+		return this.normalizeScriptedWorkflowMessage(message) === this.normalizeScriptedWorkflowMessage(SCRIPTED_IP_FEATURE_WORD);
 	}
 
 	private normalizeScriptedWorkflowMessage(message: string): string {
@@ -1417,7 +1444,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				'- 上传区：素材上传、配置输入、生成入口。',
 				'- IP 构筑区：4 个候选 IP 方案与唯一 IP 确认动作。',
 				'- 海报方案区：4 个海报方案、提示词编辑、重生成入口。',
-				'- 终稿输出区：5 个终稿卡片、导出说明与最终导出动作。',
+				'- 终稿输出区：4 个终稿卡片、导出说明与最终导出动作。',
 				'',
 				selectedScenario ? `页面定位决定：${selectedScenario.impact}` : '页面定位暂未确定，所以我先保留三种路径的弹性空间。',
 				selectedFocus ? `展示重心决定：${selectedFocus.impact}` : '展示重心暂未确定，所以我先按均衡骨架做 plan 收敛。',
@@ -1513,7 +1540,9 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		progress({
 			kind: 'progressMessage',
 			content: new MarkdownString(
-				state.workflowVersion === 'v2'
+				state.workflowVersion === 'v3'
+					? localize('customKeywordResponse.ip.executionFeatureStart', "已收到“功能”，开始整理功能增强版页面。")
+					: state.workflowVersion === 'v2'
 					? localize('customKeywordResponse.ip.executionRevisionStart', "已收到这轮修订反馈，开始整理修正版页面。")
 					: localize('customKeywordResponse.ip.executionStart', "已收到确认“{0}”，开始进入页面创建阶段。", confirmationMessage.trim() || localize('customKeywordResponse.ip.confirmationFallback', "继续"))
 			),
@@ -1606,7 +1635,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		const readmeFileExists = await this.fileService.exists(workflow.readmeFile);
 		const fixtureManifestFileExists = await this.fileService.exists(workflow.fixtureManifestFile);
 		const assetNotesFileExists = await this.fileService.exists(workflow.assetNotesFile);
-		const useRevisionPatch = state.workflowVersion === 'v2' && fileExists && styleFileExists && scriptFileExists;
+		const useRevisionPatch = state.workflowVersion !== 'v1' && fileExists && styleFileExists && scriptFileExists;
 		state.phase = 'draftingStructure';
 		progress({
 			kind: 'progressMessage',
@@ -1716,31 +1745,43 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		state.launcherConfirmationPending = state.workflowVersion === 'v1' && !state.launcherCreated;
 		state.awaitingFixes = state.workflowVersion === 'v1';
 		state.readyForSecondVersion = false;
+		const doneMessage = state.workflowVersion === 'v3'
+			? [
+				state.fileCreated ? "`vibe-demo` 页面目录已整理为功能增强版。" : "`vibe-demo` 页面目录已升级为功能增强版。",
+				"",
+				"- 当前入口、样式层、交互逻辑和配置文件已经同步更新。",
+				`- 页面入口：\`${SCRIPTED_IP_WORKFLOW_DIR}/${SCRIPTED_IP_WORKFLOW_FILE}\``,
+				`- 配套文件：\`${SCRIPTED_IP_WORKFLOW_STYLE_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_SCRIPT_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_DATA_DIR}/${SCRIPTED_IP_WORKFLOW_PLAN_FILE}\``,
+				"- 这版保留上传区布局修复、图片预处理，并新增 IP 生成风格选择窗口。",
+				"",
+				"后续可以继续补本地预览入口，或者再把页面功能联动得更完整。"
+			].join('\n')
+			: state.workflowVersion === 'v2'
+			? [
+				state.fileCreated ? "`vibe-demo` 页面目录已整理为当前修订版。" : "`vibe-demo` 页面目录已根据反馈完成修订。",
+				"",
+				"- 当前入口、样式层、交互逻辑和配置文件已经同步更新。",
+				`- 页面入口：\`${SCRIPTED_IP_WORKFLOW_DIR}/${SCRIPTED_IP_WORKFLOW_FILE}\``,
+				`- 配套文件：\`${SCRIPTED_IP_WORKFLOW_STYLE_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_SCRIPT_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_DATA_DIR}/${SCRIPTED_IP_WORKFLOW_PLAN_FILE}\``,
+				"- 这版只保留界面整理和上传处理策略，不包含 IP 风格选择弹窗。",
+				"",
+				"如果要进入功能增强版，可以输入 `功能`，我会生成带 IP 风格选择窗口的 v3。"
+			].join('\n')
+			: [
+				state.fileCreated ? "`vibe-demo` 页面目录已创建完成。" : "`vibe-demo` 页面目录已更新完成。",
+				"",
+				"- 页面主体、样式层、交互逻辑和基础配置已经整理完成。",
+				`- 当前入口文件：\`${SCRIPTED_IP_WORKFLOW_DIR}/${SCRIPTED_IP_WORKFLOW_FILE}\``,
+				`- 配套文件：\`${SCRIPTED_IP_WORKFLOW_STYLE_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_SCRIPT_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_DATA_DIR}/${SCRIPTED_IP_WORKFLOW_PLAN_FILE}\``,
+				"- 建议先补本地预览入口，方便直接演示当前页面效果。",
+				"",
+				"如果你确认，我下一步先把 `start-preview.bat` 配好；后面再根据界面反馈和上传策略要求继续修订。"
+			].join('\n');
 		progress({
 			kind: 'markdownContent',
 			content: new MarkdownString(localize(
-				state.workflowVersion === 'v2' ? 'customKeywordResponse.ip.doneRevision' : 'customKeywordResponse.ip.done',
-				(state.workflowVersion === 'v2'
-					? [
-						state.fileCreated ? "`vibe-demo` 页面目录已整理为当前修订版。" : "`vibe-demo` 页面目录已根据反馈完成修订。",
-						"",
-						"- 当前入口、样式层、交互逻辑和配置文件已经同步更新。",
-						`- 页面入口：\`${SCRIPTED_IP_WORKFLOW_DIR}/${SCRIPTED_IP_WORKFLOW_FILE}\``,
-						`- 配套文件：\`${SCRIPTED_IP_WORKFLOW_STYLE_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_SCRIPT_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_DATA_DIR}/${SCRIPTED_IP_WORKFLOW_PLAN_FILE}\``,
-						"- 这版已经把界面整理和上传处理策略一并纳入当前实现。",
-						"",
-						"如果你后面还要，我可以继续补本地预览入口，或者再把交互细节往前推进一轮。"
-					]
-					: [
-						state.fileCreated ? "`vibe-demo` 页面目录已创建完成。" : "`vibe-demo` 页面目录已更新完成。",
-						"",
-						"- 页面主体、样式层、交互逻辑和基础配置已经整理完成。",
-						`- 当前入口文件：\`${SCRIPTED_IP_WORKFLOW_DIR}/${SCRIPTED_IP_WORKFLOW_FILE}\``,
-						`- 配套文件：\`${SCRIPTED_IP_WORKFLOW_STYLE_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_SCRIPT_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_DATA_DIR}/${SCRIPTED_IP_WORKFLOW_PLAN_FILE}\``,
-						"- 建议先补本地预览入口，方便直接演示当前页面效果。",
-						"",
-						"如果你确认，我下一步先把 `start-preview.bat` 配好；后面再根据界面反馈和上传策略要求继续修订。"
-					]).join('\n')
+				state.workflowVersion === 'v3' ? 'customKeywordResponse.ip.doneFeature' : state.workflowVersion === 'v2' ? 'customKeywordResponse.ip.doneRevision' : 'customKeywordResponse.ip.done',
+				doneMessage
 			))
 		});
 	}
@@ -1868,6 +1909,28 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		const scenario = this.getScriptedWorkflowSelectedOption(SCRIPTED_IP_SCENARIO_OPTIONS, selections.scenario);
 		const focus = this.getScriptedWorkflowSelectedOption(SCRIPTED_IP_FOCUS_OPTIONS, selections.focus);
 		const pace = this.getScriptedWorkflowSelectedOption(SCRIPTED_IP_PACE_OPTIONS, selections.pace);
+		const revision = workflowVersion === 'v1'
+			? {
+				status: 'draft',
+				nextStep: 'Collect UI and upload strategy feedback before the next revision.'
+			}
+			: workflowVersion === 'v2'
+			? {
+				status: 'revised',
+				appliedUpdates: [
+					'Upload panel layout refinement',
+					'Automatic image preprocessing before generation'
+				],
+				nextStep: 'Type 功能 to generate the feature-enhanced version.'
+			}
+			: {
+				status: 'feature-enhanced',
+				appliedUpdates: [
+					'Upload panel layout refinement',
+					'Automatic image preprocessing before generation',
+					'IP style selection dialog'
+				]
+			};
 
 		return {
 			htmlSections,
@@ -1883,18 +1946,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 					focus: focus?.title ?? '未指定',
 					pace: pace?.title ?? '未指定'
 				},
-				revision: workflowVersion === 'v1'
-					? {
-						status: 'draft',
-						nextStep: 'Collect UI and upload strategy feedback before the next revision.'
-					}
-					: {
-						status: 'revised',
-						appliedUpdates: [
-							'Upload panel layout refinement',
-							'Automatic image preprocessing before generation'
-						]
-					},
+				revision,
 				preview: {
 					entry: 'index.html',
 					url: 'http://127.0.0.1:5500/'
@@ -1950,8 +2002,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				{ id: '终稿 01', title: '终稿主推版', description: '主视觉完整、适合第一屏展示。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[0] },
 				{ id: '终稿 02', title: '终稿细节版', description: '更强调材质、结构与灯光精修。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[1] },
 				{ id: '终稿 03', title: '终稿传播版', description: '适合社媒与活动延展的成片表达。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[2] },
-				{ id: '终稿 04', title: '终稿陈列版', description: '适合线下展架与终端陈列展示。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[3] },
-				{ id: '终稿 05', title: '终稿延展版', description: '适合补充第五张横向延展与备选展示。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[4] }
+				{ id: '终稿 04', title: '终稿陈列版', description: '适合线下展架与终端陈列展示。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[3] }
 			]
 		}, null, 2) + '\n';
 	}
@@ -1963,7 +2014,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		}));
 		const finalAssets = SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES.map((filename, index) => ({
 			filename,
-			content: this.createScriptedWorkflowFixtureSvg(`Final ${String(index + 1).padStart(2, '0')}`, ['终稿主推', '终稿精修', '终稿传播', '终稿陈列', '终稿延展'][index] ?? '终稿展示', ['#8F341C', '#2F6E67', '#805936', '#445A73', '#6A4A8A'][index % 5] ?? '#8F341C')
+			content: this.createScriptedWorkflowFixtureSvg(`Final ${String(index + 1).padStart(2, '0')}`, ['终稿主推', '终稿精修', '终稿传播', '终稿陈列'][index] ?? '终稿展示', ['#8F341C', '#2F6E67', '#805936', '#445A73'][index % 4] ?? '#8F341C')
 		}));
 		return [...ipAssets, ...finalAssets];
 	}
@@ -2145,6 +2196,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				'.preview-grid {',
 				'  margin-top: 18px;',
 				'}',
+				'',
 				'/* scripted-ip-upload-variant:end */',
 				''
 			].join('\n');
@@ -2155,7 +2207,9 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 	private createScriptedWorkflowJs(js: string, workflowVersion: ScriptedWorkflowVersion): string {
 		const versionJs = workflowVersion === 'v1'
 			? this.createScriptedWorkflowV1UploadScript()
-			: this.createScriptedWorkflowV2UploadScript();
+			: workflowVersion === 'v2'
+			? this.createScriptedWorkflowV2UploadScript()
+			: this.createScriptedWorkflowV3UploadScript();
 
 		return js + '\n' + versionJs;
 	}
@@ -2287,6 +2341,14 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 	}
 
 	private createScriptedWorkflowV2UploadScript(): string {
+		return this.createScriptedWorkflowV2UploadScriptBase(false);
+	}
+
+	private createScriptedWorkflowV3UploadScript(): string {
+		return this.createScriptedWorkflowV2UploadScriptBase(true);
+	}
+
+	private createScriptedWorkflowV2UploadScriptBase(includeStyleDialog: boolean): string {
 		return [
 			'',
 			'/* scripted-ip-upload-workflow:start */',
@@ -2300,8 +2362,21 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			'  const imagePreprocessFailureMessage = "Image preprocessing failed: the uploaded file could not be reduced to the supported size profile. Please try another image with a simpler background or lower native resolution.";',
 			'  const originalReadPreview = readPreview;',
 			'  const originalHandleGenerateIp = handleGenerateIp;',
+			...(includeStyleDialog ? [
+			'  const defaultIpStylePreferences = { color: "天青碧影", style: "3D 手办质感", background: "纯白背景" };',
+			'  const defaultIpStyleCustom = { color: "", style: "", background: "" };',
+			'  const ipStyleOptionGroups = [',
+			'    { key: "color", label: "颜色", customLabel: "自定义颜色", placeholder: "例如：湖蓝渐变、鎏金红、黑白水墨", options: ["天青碧影", "桃夭灼华", "紫极华裳", "丹枫秋韵", "水墨黑白", "金玉暖黄", "青花瓷蓝", "赛博霓虹", "薄荷奶绿"] },',
+			'    { key: "style", label: "风格", customLabel: "自定义风格", placeholder: "例如：宋代工笔、低多边形、毛绒玩具", options: ["3D 手办质感", "国风 Q 版", "商业潮玩", "水墨插画", "二次元厚涂", "黏土玩具", "玻璃水晶", "木雕玉雕", "毛绒玩偶"] },',
+			'    { key: "background", label: "背景", customLabel: "自定义背景", placeholder: "例如：竹林晨雾、节庆灯会、透明 PNG", options: ["纯白背景", "透明感留白", "含简约场景", "中式园林", "产品展台", "节日氛围", "电商棚拍", "透明背景", "暗色聚光"] }',
+			'  ];',
+			] : []),
 			'',
 			'  state.uploadDiagnostics = state.uploadDiagnostics || { ip: null, product: null };',
+			...(includeStyleDialog ? [
+			'  state.ipStylePreferences = state.ipStylePreferences || { ...defaultIpStylePreferences };',
+			'  state.ipStyleCustom = state.ipStyleCustom || { ...defaultIpStyleCustom };',
+			] : []),
 			'',
 			'  function setUploadStatus(message, type) {',
 			'    if (!uploadStatusEl) {',
@@ -2428,6 +2503,136 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			'    setUploadStatus(processed.wasCompressed ? "Reference image prepared for generation. Size and resolution were optimized automatically." : "Reference image is ready for generation.", processed.wasCompressed ? "success" : "info");',
 			'  }',
 			'',
+			...(includeStyleDialog ? [
+			'  function ensureIpStyleDialogCss() {',
+			'    if (document.getElementById("ipStyleDialogRuntimeCss")) {',
+			'      return;',
+			'    }',
+			'    const style = document.createElement("style");',
+			'    style.id = "ipStyleDialogRuntimeCss";',
+			'    style.textContent = [',
+			'      ".ip-style-dialog-backdrop{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(34,22,16,.42);backdrop-filter:blur(12px)}",',
+			'      ".ip-style-dialog-backdrop.is-open{display:flex}",',
+			'      ".ip-style-dialog{width:min(860px,100%);max-height:min(760px,calc(100vh - 48px));overflow:auto;padding:24px;border-radius:24px;border:1px solid rgba(255,255,255,.68);background:linear-gradient(180deg,rgba(255,250,244,.98),rgba(248,239,229,.96));box-shadow:0 28px 80px rgba(48,31,22,.24);color:var(--text,#2f241d);font:14px/1.6 \\"Microsoft YaHei\\",\\"PingFang SC\\",sans-serif}",',
+			'      ".ip-style-dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}",',
+			'      ".ip-style-dialog-title{margin:0 0 4px;font-size:22px;line-height:1.2}",',
+			'      ".ip-style-close{width:36px;height:36px;border:0;border-radius:999px;background:rgba(48,31,22,.08);color:var(--text,#2f241d);font-size:22px;cursor:pointer;flex:0 0 auto}",',
+			'      ".ip-style-groups{display:grid;gap:16px}",',
+			'      ".ip-style-group-title{display:block;margin-bottom:8px;font-weight:800;font-size:15px}",',
+			'      ".ip-style-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}",',
+			'      ".ip-style-option{min-height:48px;padding:10px 12px;border:1px solid rgba(191,91,49,.16);border-radius:16px;background:rgba(255,255,255,.72);color:var(--text,#2f241d);font:inherit;font-weight:700;cursor:pointer;text-align:center;transition:border-color .18s ease,background .18s ease,color .18s ease,transform .18s ease}",',
+			'      ".ip-style-option:hover{transform:translateY(-1px)}",',
+			'      ".ip-style-option.is-selected{border-color:rgba(191,91,49,.48);background:linear-gradient(135deg,var(--accent,#bf5b31),var(--accent-deep,#8f341c));color:#fff8f5}",',
+			'      ".ip-style-custom{margin-top:10px;padding:12px;border-radius:16px;border:1px dashed rgba(191,91,49,.22);background:rgba(255,255,255,.48);display:block}",',
+			'      ".ip-style-custom.is-custom-active{border-style:solid;border-color:rgba(191,91,49,.42);background:rgba(255,247,239,.82)}",',
+			'      ".ip-style-custom-label{display:block;margin-bottom:6px;font-size:12px;font-weight:800;color:var(--accent-deep,#8f341c)}",',
+			'      ".ip-style-custom-input{width:100%;min-height:44px;padding:10px 12px;border:1px solid rgba(191,91,49,.18);border-radius:14px;background:rgba(255,255,255,.9);color:var(--text,#2f241d);font:inherit;outline:none;box-sizing:border-box}",',
+			'      ".ip-style-custom-input:focus{border-color:rgba(191,91,49,.55);box-shadow:0 0 0 3px rgba(191,91,49,.12)}",',
+			'      ".ip-style-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;flex-wrap:wrap}",',
+			'      "@media (max-width:720px){.ip-style-options{grid-template-columns:1fr}.ip-style-dialog{padding:18px}}",',
+			'    ].join("\\n");',
+			'    document.head.append(style);',
+			'  }',
+			'',
+			'  function createIpStyleDialog() {',
+			'    ensureIpStyleDialogCss();',
+			'    const backdrop = document.createElement("div");',
+			'    backdrop.className = "ip-style-dialog-backdrop";',
+			'    backdrop.setAttribute("role", "presentation");',
+			'    backdrop.innerHTML = `',
+			'      <div class="ip-style-dialog" role="dialog" aria-modal="true" aria-labelledby="ipStyleDialogTitle">',
+			'        <div class="ip-style-dialog-head">',
+			'          <div>',
+			'            <h4 class="ip-style-dialog-title" id="ipStyleDialogTitle">选择 IP 生成风格</h4>',
+			'            <div class="muted">这些选项用于演示生成前参数选择，当前不会改写实际提示词。</div>',
+			'          </div>',
+			'          <button class="ip-style-close" type="button" data-action="close" aria-label="关闭">×</button>',
+			'        </div>',
+			'        <div class="ip-style-groups"></div>',
+			'        <div class="ip-style-actions">',
+			'          <button class="secondary-button" type="button" data-action="cancel">取消</button>',
+			'          <button class="primary-button" type="button" data-action="confirm">确认生成</button>',
+			'        </div>',
+			'      </div>`;',
+			'    const groupsEl = backdrop.querySelector(".ip-style-groups");',
+			'    ipStyleOptionGroups.forEach(group => {',
+			'      const groupEl = document.createElement("div");',
+			'      groupEl.className = "ip-style-group";',
+			'      const labelEl = document.createElement("strong");',
+			'      labelEl.className = "ip-style-group-title";',
+			'      labelEl.textContent = group.label;',
+			'      const optionsEl = document.createElement("div");',
+			'      optionsEl.className = "ip-style-options";',
+			'      group.options.forEach(option => {',
+			'        const button = document.createElement("button");',
+			'        button.className = "ip-style-option";',
+			'        button.type = "button";',
+			'        button.dataset.key = group.key;',
+			'        button.dataset.value = option;',
+			'        button.textContent = option;',
+			'        button.addEventListener("click", () => {',
+			'          state.ipStylePreferences[group.key] = option;',
+			'          syncIpStyleDialogSelection(backdrop);',
+			'        });',
+			'        optionsEl.append(button);',
+			'      });',
+			'      const customEl = document.createElement("label");',
+			'      customEl.className = "ip-style-custom";',
+			'      const customLabelEl = document.createElement("span");',
+			'      customLabelEl.className = "ip-style-custom-label";',
+			'      customLabelEl.textContent = group.customLabel;',
+			'      const input = document.createElement("input");',
+			'      input.className = "ip-style-custom-input";',
+			'      input.type = "text";',
+			'      input.dataset.key = group.key;',
+			'      input.placeholder = group.placeholder;',
+			'      input.value = state.ipStyleCustom[group.key] || "";',
+			'      input.addEventListener("input", () => {',
+			'        const customValue = input.value.trim();',
+			'        state.ipStyleCustom[group.key] = customValue;',
+			'        state.ipStylePreferences[group.key] = customValue || defaultIpStylePreferences[group.key];',
+			'        syncIpStyleDialogSelection(backdrop);',
+			'      });',
+			'      customEl.append(customLabelEl, input);',
+			'      groupEl.append(labelEl, optionsEl, customEl);',
+			'      groupsEl.append(groupEl);',
+			'    });',
+			'    backdrop.addEventListener("click", event => {',
+			'      const target = event.target;',
+			'      if (target === backdrop || target?.dataset?.action === "close" || target?.dataset?.action === "cancel") {',
+			'        closeIpStyleDialog(backdrop);',
+			'      }',
+			'      if (target?.dataset?.action === "confirm") {',
+			'        closeIpStyleDialog(backdrop);',
+			'        void runGenerateIp();',
+			'      }',
+			'    });',
+			'    document.body.append(backdrop);',
+			'    return backdrop;',
+			'  }',
+			'',
+			'  function syncIpStyleDialogSelection(backdrop) {',
+			'    backdrop.querySelectorAll(".ip-style-option").forEach(button => {',
+			'      button.classList.toggle("is-selected", state.ipStylePreferences[button.dataset.key] === button.dataset.value);',
+			'    });',
+			'    backdrop.querySelectorAll(".ip-style-custom-input").forEach(input => {',
+			'      const key = input.dataset.key;',
+			'      input.value = state.ipStyleCustom[key] || "";',
+			'      input.closest(".ip-style-custom")?.classList.toggle("is-custom-active", Boolean(state.ipStyleCustom[key]));',
+			'    });',
+			'  }',
+			'',
+			'  function openIpStyleDialog() {',
+			'    const backdrop = document.querySelector(".ip-style-dialog-backdrop") || createIpStyleDialog();',
+			'    syncIpStyleDialogSelection(backdrop);',
+			'    backdrop.classList.add("is-open");',
+			'  }',
+			'',
+			'  function closeIpStyleDialog(backdrop) {',
+			'    backdrop.classList.remove("is-open");',
+			'  }',
+			'',
+			] : []),
 			'  async function runGenerateIp() {',
 			'    const originalText = confirmUploadBtn.textContent;',
 			'    confirmUploadBtn.disabled = true;',
@@ -2462,7 +2667,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			'  confirmUploadBtn.addEventListener("click", event => {',
 			'    event.preventDefault();',
 			'    event.stopImmediatePropagation();',
-			'    void runGenerateIp();',
+			includeStyleDialog ? '    openIpStyleDialog();' : '    void runGenerateIp();',
 			'  }, true);',
 			'',
 			'  resetAllBtn.addEventListener("click", () => {',
@@ -2604,6 +2809,18 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			'await originalReadPreview(input, img, wrapper, key);',
 			'const processed = await preprocessImage(file);'
 		];
+		const featureDialogSnippets = [
+			'const defaultIpStylePreferences = { color: "天青碧影", style: "3D 手办质感", background: "纯白背景" };',
+			'const defaultIpStyleCustom = { color: "", style: "", background: "" };',
+			'function ensureIpStyleDialogCss()',
+			'style.id = "ipStyleDialogRuntimeCss";',
+			'function createIpStyleDialog()',
+			'state.ipStylePreferences[group.key] = option;',
+			'state.ipStyleCustom[group.key] = customValue;',
+			'input.closest(".ip-style-custom")?.classList.toggle("is-custom-active", Boolean(state.ipStyleCustom[key]));',
+			'openIpStyleDialog();'
+		];
+		const hasFeatureDialog = content.includes('function createIpStyleDialog()') || content.includes('state.ipStylePreferences');
 		const forbiddenSnippets = [
 			'const axxEdEd = 1536;',
 			'const e agePreprocessFa',
@@ -2613,6 +2830,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		];
 
 		return requiredSnippets.every(snippet => content.includes(snippet))
+			&& (!hasFeatureDialog || featureDialogSnippets.every(snippet => content.includes(snippet)))
 			&& forbiddenSnippets.every(snippet => !content.includes(snippet));
 	}
 

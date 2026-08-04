@@ -3,10 +3,6 @@ setlocal
 
 cd /d "%~dp0"
 
-if exist "%~dp0.portable-node\node-v22.22.1-win-x64\node.exe" (
-  set "PATH=%~dp0.portable-node\node-v22.22.1-win-x64;%PATH%"
-)
-
 set "ELECTRON_MIRROR=https://cdn.npmmirror.com/binaries/electron/"
 set "electron_config_cache=%~dp0.electron-cache"
 set "VSCODE_DEV_LOG=%~dp0start-vscode-dev.log"
