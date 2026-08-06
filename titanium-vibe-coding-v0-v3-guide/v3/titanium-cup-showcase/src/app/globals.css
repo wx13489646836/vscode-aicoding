@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0908;
+  --foreground: #e5e2db;
+  --accent-gold: #d4af6e;
+  --accent-bronze: #b8945f;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(212, 175, 110, 0.3) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #d4af6e 0%, #b8945f 100%);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #e5c080 0%, #c9a570 100%);
+}
+
+body {
+  background: 
+    radial-gradient(ellipse at top, rgba(212, 175, 110, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom, rgba(184, 148, 95, 0.02) 0%, transparent 50%),
+    linear-gradient(180deg, #0a0908 0%, #13120f 50%, #0a0908 100%);
+  background-attachment: fixed;
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 100px,
+      rgba(212, 175, 110, 0.01) 100px,
+      rgba(212, 175, 110, 0.01) 101px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 100px,
+      rgba(212, 175, 110, 0.01) 100px,
+      rgba(212, 175, 110, 0.01) 101px
+    );
+  pointer-events: none;
+  z-index: 0;
+}
+
+::selection {
+  background: rgba(212, 175, 110, 0.3);
+  color: white;
+}

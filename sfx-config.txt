@@ -1,0 +1,7 @@
+;!@Install@!UTF-8!
+Title="VS Code Vibe Demo"
+BeginPrompt="This will install VS Code Vibe Demo and Titanium Cup showcases."
+ExtractPathText="Install to:"
+ExtractPath="D:\\"
+FinishMessage="Installation complete! Open D:\\ and run setup.cmd to create desktop shortcuts."
+;!@InstallEnd@!

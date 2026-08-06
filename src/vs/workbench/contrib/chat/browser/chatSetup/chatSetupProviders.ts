@@ -10,6 +10,8 @@ import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
+import { FileAccess } from '../../../../../base/common/network.js';
+import { dirname } from '../../../../../base/common/path.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { Lazy } from '../../../../../base/common/lazy.js';
 import { Disposable, DisposableStore, IDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -77,7 +79,7 @@ const ToolsAgentContextKey = ContextKeyExpr.and(
 
 const TITANIUM_WORKFLOW_TRIGGER = 'v0-v3';
 const TITANIUM_WORKFLOW_DIR = 'titanium-cup-storefront';
-const TITANIUM_WORKFLOW_SOURCE_ROOT = 'D:/titanium-vibe-coding-v0-v3-guide';
+const TITANIUM_WORKFLOW_SOURCE_DIR = 'titanium-vibe-coding-v0-v3-guide';
 const TITANIUM_WORKFLOW_SECTION_DELAY = 2800;
 const TITANIUM_WORKFLOW_STREAM_FRAMES = 18;
 const TITANIUM_WORKFLOW_PROGRESS_DELAY = 1600;
@@ -1197,7 +1199,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 
 	private async runTitaniumWorkflowStage(state: ITitaniumWorkflowState, progress: (part: IChatProgress) => void): Promise<void> {
 		const config = TITANIUM_WORKFLOW_STAGES[state.stage];
-		const sourceStageRoot = URI.joinPath(URI.file(TITANIUM_WORKFLOW_SOURCE_ROOT), state.stage);
+		const sourceStageRoot = URI.joinPath(this.getTitaniumWorkflowSourceRoot(), state.stage);
 		const targetStageRoot = URI.joinPath(state.targetRoot, state.stage);
 
 		if (!await this.fileService.exists(sourceStageRoot)) {
@@ -1282,6 +1284,10 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			: URI.joinPath(workspaceFolder.uri, TITANIUM_WORKFLOW_DIR);
 	}
 
+	private getTitaniumWorkflowSourceRoot(): URI {
+		return URI.joinPath(URI.file(dirname(FileAccess.asFileUri('').fsPath)), TITANIUM_WORKFLOW_SOURCE_DIR);
+	}
+
 	private normalizeTitaniumWorkflowMessage(message: string): string {
 		return message.toLowerCase().replace(/[\s,，。.!！?？:：;；'"`~]+/g, '');
 	}
@@ -1321,7 +1327,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		}
 
 		if (stage === 'v1' || stage === 'v2') {
-			const assetsRoot = URI.joinPath(URI.file(TITANIUM_WORKFLOW_SOURCE_ROOT), 'assets', 'products');
+			const assetsRoot = URI.joinPath(this.getTitaniumWorkflowSourceRoot(), 'assets', 'products');
 			const mediaNames = await this.listTitaniumWorkflowChildNames(assetsRoot, child => child.isFile && /\.(jpg|jpeg|png|webp|mp4)$/i.test(child.name));
 			const shownNames = mediaNames.slice(0, 10);
 			return [
@@ -1334,7 +1340,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			].join('\n');
 		}
 
-		const modelRoot = URI.joinPath(URI.file(TITANIUM_WORKFLOW_SOURCE_ROOT), 'assets', 'products', 'model', 'person-cup');
+		const modelRoot = URI.joinPath(this.getTitaniumWorkflowSourceRoot(), 'assets', 'products', 'model', 'person-cup');
 		const modelNames = await this.listTitaniumWorkflowChildNames(modelRoot, child => child.isFile && /\.(obj|mtl|png)$/i.test(child.name));
 		return [
 			'检查结果：',
@@ -1435,8 +1441,9 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 	}
 
 	private createTitaniumWorkflowRunScript(stage: TitaniumWorkflowStage): string {
-		const cacheDir = `${TITANIUM_WORKFLOW_SOURCE_ROOT}/${stage}/titanium-cup-showcase/node_modules`.replace(/\//g, '\\');
-		const sharedCacheDir = `${TITANIUM_WORKFLOW_SOURCE_ROOT}/node_modules`.replace(/\//g, '\\');
+		const sourceRoot = this.getTitaniumWorkflowSourceRoot().fsPath;
+		const cacheDir = `${sourceRoot}\\${stage}\\titanium-cup-showcase\\node_modules`;
+		const sharedCacheDir = `${sourceRoot}\\node_modules`;
 		const port = this.getTitaniumWorkflowPreviewPort(stage);
 		return [
 			'@echo off',

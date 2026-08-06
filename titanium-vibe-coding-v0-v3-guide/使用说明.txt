@@ -1,0 +1,41 @@
+Titanium Cup Showcase - Installation Guide
+==========================================
+
+This package contains a multi-version (v0-v3) titanium cup showcase project.
+
+Requirements:
+- Node.js 18+ (recommended: Node.js 24)
+- npm (comes with Node.js)
+- Windows 10/11 (for .bat startup scripts)
+
+Quick Start:
+1. Open the folder for the version you want to view (v1, v2, or v3)
+2. Double-click the .bat file (e.g., "启动-v1-页面.bat")
+3. Wait for dependencies to install (first time only)
+4. Browser will open automatically to http://127.0.0.1:3000
+
+Version Guide:
+- v0: Technical foundation (empty Next.js project)
+- v1: Basic storefront with product images
+- v2: Premium dark theme with video support
+- v3: Final version with 3D model viewer and smart chat
+
+Manual Start:
+1. Open terminal in the version folder
+2. Run: cd titanium-cup-showcase
+3. Run: npm install
+4. Run: npm run dev
+5. Open http://127.0.0.1:3000
+
+Project Structure:
+titanium-vibe-coding-installer/
+├── assets/products/     (images, videos, 3D models)
+├── v0/                  (foundation)
+├── v1/                  (basic storefront)
+├── v2/                  (premium media)
+└── v3/                  (3D + smart chat final)
+
+Notes:
+- First run installs npm dependencies (~500MB)
+- 3D models are ~100MB, loading may take time on slow connections
+- Each version is independent, can be run separately

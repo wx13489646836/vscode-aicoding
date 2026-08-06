@@ -49,3 +49,9 @@ dist
 .portable-data/
 *.log
 .tmp-*
+
+# Local Titanium demo dependencies and build output
+/titanium-vibe-coding-v0-v3-guide/**/node_modules/
+/titanium-vibe-coding-v0-v3-guide/**/.next/
+/titanium-vibe-coding-v0-v3-guide/**/*.log
+/.tools/
