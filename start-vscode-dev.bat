@@ -3,10 +3,17 @@ setlocal
 
 cd /d "%~dp0"
 
+if exist "%~dp0.portable-node\node-v22.22.1-win-x64\node.exe" (
+  set "PATH=%~dp0.portable-node\node-v22.22.1-win-x64;%PATH%"
+)
+
 set "ELECTRON_MIRROR=https://cdn.npmmirror.com/binaries/electron/"
 set "electron_config_cache=%~dp0.electron-cache"
 set "VSCODE_DEV_LOG=%~dp0start-vscode-dev.log"
 set "BOOTSTRAP_LOG=%TEMP%\vscode-dev-bootstrap.log"
+set "VSCODE_APPDATA=%LOCALAPPDATA%\CodeOSS-Traditional-Dev"
+
+if not exist "%VSCODE_APPDATA%" mkdir "%VSCODE_APPDATA%"
 
 set "NAMESHORT="
 for /f "tokens=2 delims=:," %%a in ('findstr /R /C:"\"nameShort\":.*" product.json') do if not defined NAMESHORT set "NAMESHORT=%%~a"
@@ -40,7 +47,7 @@ echo ==== %date% %time% ====>>"%VSCODE_DEV_LOG%"
 echo Starting VS Code dev from %cd%>>"%VSCODE_DEV_LOG%"
 if exist "%CODE_EXE%" echo Using cached Electron at "%CODE_EXE%">>"%VSCODE_DEV_LOG%"
 
-call scripts\code.bat %* >>"%VSCODE_DEV_LOG%" 2>&1
+call scripts\code.bat --skip-sessions-welcome --new-window %* >>"%VSCODE_DEV_LOG%" 2>&1
 set "EXITCODE=%ERRORLEVEL%"
 
 echo. 

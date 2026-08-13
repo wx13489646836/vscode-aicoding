@@ -1,0 +1,32 @@
+{
+  "project": "vibe-demo",
+  "output": "vibe-demo",
+  "entry": "index.html",
+  "version": "v3",
+  "selections": {
+    "scenario": "品牌提案型",
+    "focus": "IP 与产品平衡",
+    "pace": "演示感渐进生成"
+  },
+  "revision": {
+    "status": "knowledge-enabled",
+    "appliedUpdates": [
+      "Bundled brand and compliance knowledge base",
+      "Knowledge-base progress presentation with fixture-only results",
+      "Ten-second prompt and final generation progress animations"
+    ]
+  },
+  "knowledgeBase": {
+    "file": "data/knowledge-base.json",
+    "categories": [
+      "品牌素材库",
+      "合规规则库",
+      "行业术语库"
+    ],
+    "priority": "合规规则库 > 品牌素材库 > 行业术语库"
+  },
+  "preview": {
+    "entry": "index.html",
+    "url": "http://127.0.0.1:5500/"
+  }
+}

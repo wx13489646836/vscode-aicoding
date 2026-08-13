@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BrandVision AI 绘图智能体</title>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar glass">
+      <div class="brand">
+        <div class="logo">BV</div>
+        <div>
+          <h1>BrandVision AI 绘图智能体</h1>
+          <div class="muted">分阶段 AI 海报生成</div>
+        </div>
+      </div>
+      <div class="status-pills">
+        <div class="pill">阶段: <span id="currentStageText">录入阶段</span></div>
+        <div class="pill">已锁定 IP: <span id="lockedIpText">未确认</span></div>
+        <div class="pill">已锁定海报: <span id="lockedPosterText">未确认</span></div>
+      </div>
+      <button class="knowledge-trigger" type="button" id="knowledgeBaseButton" aria-controls="knowledgeBaseDrawer" aria-expanded="false">
+        <span class="knowledge-trigger-dot" aria-hidden="true"></span>
+        <span>知识库</span>
+        <span class="knowledge-trigger-state">已连接</span>
+      </button>
+    </div>
+
+    <div class="knowledge-backdrop" id="knowledgeBaseBackdrop" hidden></div>
+    <aside class="knowledge-drawer" id="knowledgeBaseDrawer" aria-hidden="true" aria-labelledby="knowledgeBaseTitle">
+      <div class="knowledge-drawer-head">
+        <div>
+          <div class="section-kicker">V3 Knowledge</div>
+          <h2 id="knowledgeBaseTitle">品牌知识库</h2>
+          <div class="muted">合规规则优先 · 页面只读摘要</div>
+        </div>
+        <button class="knowledge-close" type="button" id="knowledgeBaseClose" aria-label="关闭知识库">×</button>
+      </div>
+      <div class="knowledge-tabs" id="knowledgeBaseTabs" role="tablist" aria-label="知识库分类"></div>
+      <div class="knowledge-content" id="knowledgeBaseContent" aria-live="polite">正在载入知识库摘要…</div>
+    </aside>
+
+    <section class="step-tracker">
+      <div class="step-card active" data-stage="0"><div class="step-index">01</div><strong>录入阶段</strong><div class="muted">上传素材与参数。</div></div>
+      <div class="step-card" data-stage="1"><div class="step-index">02</div><strong>IP 构筑</strong><div class="muted">确认唯一 IP。</div></div>
+      <div class="step-card" data-stage="2"><div class="step-index">03</div><strong>布局设计</strong><div class="muted">选择构图方向。</div></div>
+      <div class="step-card" data-stage="3"><div class="step-index">04</div><strong>成品精修</strong><div class="muted">输出高清终稿。</div></div>
+    </section>
+
+    <section class="section glass" id="uploadSection">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">Stage 01</div>
+          <h3>素材上传</h3>
+          <div class="muted">先录入素材与风格参数。</div>
+        </div>
+      </div>
+
+      <div class="upload-grid">
+        <div class="upload-card">
+          <div class="selection-meta" style="justify-content:space-between;align-items:center;margin-bottom:12px">
+            <strong>素材上传区</strong>
+          </div>
+          <div class="upload-guidance upload-guidance-stable">
+            <div class="upload-guidance-copy">
+              <strong class="upload-guidance-title">上传说明</strong>
+              <div class="muted">建议上传主体清晰、边缘完整的参考图。页面会在上传后自动整理图片尺寸，方便继续进入后续生成流程。</div>
+            </div>
+          </div>
+
+          <div class="preview-grid">
+            <label class="dropzone" id="ipDropzone">
+              <img id="ipPreview" alt="手绘 IP 预览">
+              <input type="file" id="ipInput" accept="image/*">
+              <div class="dropzone-copy">
+                <strong>上传手绘 IP</strong>
+                <div class="muted">PNG / JPG / WebP</div>
+              </div>
+            </label>
+
+            <label class="dropzone" id="productDropzone">
+              <img id="productPreview" alt="产品白底图预览">
+              <input type="file" id="productInput" accept="image/*">
+              <div class="dropzone-copy">
+                <strong>上传产品白底图</strong>
+                <div class="muted">建议使用白底图</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="upload-card">
+          <strong>配置信息</strong>
+          <div class="form-grid">
+            <div class="field">
+              <label for="apiKey">API Key</label>
+              <input id="apiKey" type="password" placeholder="输入 API Key">
+            </div>
+            <div class="field">
+              <label for="apiHost">接口地址</label>
+              <input id="apiHost" placeholder="例如：https://jeniya.cn/">
+            </div>
+            <div class="field">
+              <label for="textModel">文本模型</label>
+              <input id="textModel" type="text" placeholder="例如：gemini-3.1-flash-lite-preview">
+            </div>
+            <div class="field">
+              <label for="imageModel">出图模型</label>
+              <input id="imageModel" type="text" placeholder="例如：gemini-3.1-flash-image-preview">
+            </div>
+            <div class="field"><label for="sceneType">海报使用场景</label><select id="sceneType"><option>电商主图</option><option>线下展架</option><option>社媒海报</option><option>品牌快闪活动</option></select></div>
+          </div>
+          <div class="cta-row" style="margin-top:18px">
+            <button class="secondary-button" type="button" id="saveConfig">保存配置</button>
+            <button class="primary-button" type="button" id="confirmUpload">生成 4 个 IP 方案</button>
+            <button class="secondary-button" type="button" id="resetAll">重置流程</button>
+          </div>
+          <div class="upload-inline-status" id="uploadStatus" data-state="idle" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section glass" id="ipSection">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">Stage 02</div>
+          <h3>IP 选择</h3>
+        </div>
+      </div>
+
+      <div class="selection-grid" id="ipGrid">
+        <article class="selection-card" data-type="ip" data-id="方案 1" data-name="方案 1">
+          <div class="selection-visual empty"></div>
+          <div class="selection-info"><strong>方案 1</strong><div class="muted">等待生成</div></div>
+        </article>
+        <article class="selection-card" data-type="ip" data-id="方案 2" data-name="方案 2">
+          <div class="selection-visual empty"></div>
+          <div class="selection-info"><strong>方案 2</strong><div class="muted">等待生成</div></div>
+        </article>
+        <article class="selection-card" data-type="ip" data-id="方案 3" data-name="方案 3">
+          <div class="selection-visual empty"></div>
+          <div class="selection-info"><strong>方案 3</strong><div class="muted">等待生成</div></div>
+        </article>
+        <article class="selection-card" data-type="ip" data-id="方案 4" data-name="方案 4">
+          <div class="selection-visual empty"></div>
+          <div class="selection-info"><strong>方案 4</strong><div class="muted">等待生成</div></div>
+        </article>
+      </div>
+
+      <div class="cta-row" style="margin-top:18px">
+        <button class="primary-button" type="button" id="confirmIp">生成 4 个文字方案</button>
+      </div>
+      <div class="generation-status" id="posterGenerationStatus" data-active="false" aria-live="polite">
+        <span class="generation-pulse" aria-hidden="true"></span>
+        <div class="generation-status-copy">
+          <strong>正在生成提示词</strong>
+          <span class="generation-status-text">正在分析已锁定的 IP 与产品信息</span>
+          <span class="generation-progress" aria-hidden="true"><span></span></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section glass" id="posterSection">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">Stage 03</div>
+          <h3>海报方案</h3>
+        </div>
+      </div>
+
+      <div class="poster-stage" id="posterGrid">
+        <article class="poster-tab" data-id="方案1">
+          <div class="poster-info">
+            <strong>方案1</strong>
+            <div class="muted"></div>
+            <div class="prompt-box">
+              <span class="prompt-label">提示词</span>
+              <textarea class="prompt-editor" placeholder="选中该方案后可编辑提示词"></textarea>
+            </div>
+            <button class="secondary-button poster-regen" type="button" data-index="0">重生成此方案</button>
+          </div>
+        </article>
+        <article class="poster-tab" data-id="方案2">
+          <div class="poster-info">
+            <strong>方案2</strong>
+            <div class="muted"></div>
+            <div class="prompt-box">
+              <span class="prompt-label">提示词</span>
+              <textarea class="prompt-editor" placeholder="选中该方案后可编辑提示词"></textarea>
+            </div>
+            <button class="secondary-button poster-regen" type="button" data-index="1">重生成此方案</button>
+          </div>
+        </article>
+        <article class="poster-tab" data-id="方案3">
+          <div class="poster-info">
+            <strong>方案3</strong>
+            <div class="muted"></div>
+            <div class="prompt-box">
+              <span class="prompt-label">提示词</span>
+              <textarea class="prompt-editor" placeholder="选中该方案后可编辑提示词"></textarea>
+            </div>
+            <button class="secondary-button poster-regen" type="button" data-index="2">重生成此方案</button>
+          </div>
+        </article>
+        <article class="poster-tab" data-id="方案4">
+          <div class="poster-info">
+            <strong>方案4</strong>
+            <div class="muted"></div>
+            <div class="prompt-box">
+              <span class="prompt-label">提示词</span>
+              <textarea class="prompt-editor" placeholder="选中该方案后可编辑提示词"></textarea>
+            </div>
+            <button class="secondary-button poster-regen" type="button" data-index="3">重生成此方案</button>
+          </div>
+        </article>
+      </div>
+
+      <div class="cta-row" style="margin-top:18px">
+        <button class="primary-button" type="button" id="confirmPoster">根据已选方案生成 5 张终稿</button>
+      </div>
+      <div class="generation-status" id="finalGenerationStatus" data-active="false" aria-live="polite">
+        <span class="generation-pulse" aria-hidden="true"></span>
+        <div class="generation-status-copy">
+          <strong>正在生成终稿</strong>
+          <span class="generation-status-text">正在锁定海报构图与主体关系</span>
+          <span class="generation-progress" aria-hidden="true"><span></span></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section glass" id="finalSection">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">Stage 04</div>
+          <h3>终稿输出</h3>
+        </div>
+      </div>
+
+      <div class="final-grid" id="finalGrid">
+        <article class="final-card" data-id="终稿 01"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 01</strong><div class="muted">等待生成</div></div></article>
+        <article class="final-card" data-id="终稿 02"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 02</strong><div class="muted">等待生成</div></div></article>
+        <article class="final-card" data-id="终稿 03"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 03</strong><div class="muted">等待生成</div></div></article>
+        <article class="final-card" data-id="终稿 04"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 04</strong><div class="muted">等待生成</div></div></article>
+        <article class="final-card" data-id="终稿 05"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 05</strong><div class="muted">等待生成</div></div></article>
+      </div>
+
+      <div class="export-layout">
+        <div class="export-box">
+          <h4>导出</h4>
+          <ul>
+            <li>包含已选 3D IP 图。</li>
+            <li>包含已选方案文字稿与提示词。</li>
+            <li>包含勾选的终稿图。</li>
+          </ul>
+          <div class="cta-row" style="margin-top:18px">
+            <button class="primary-button" type="button" id="exportBtn">确认终稿并导出资产包</button>
+            <button class="secondary-button" type="button">下载流程记录</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+  <script src="./app.js?v=v3-knowledge-flow"></script>
+</body>
+</html>

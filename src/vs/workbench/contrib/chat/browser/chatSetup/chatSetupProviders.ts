@@ -83,6 +83,7 @@ const SCRIPTED_IP_WORKFLOW_SCRIPT_FILE = 'app.js';
 const SCRIPTED_IP_WORKFLOW_README_FILE = 'README.md';
 const SCRIPTED_IP_WORKFLOW_DATA_DIR = 'data';
 const SCRIPTED_IP_WORKFLOW_PLAN_FILE = 'plan.json';
+const SCRIPTED_IP_WORKFLOW_KNOWLEDGE_BASE_FILE = 'knowledge-base.json';
 const SCRIPTED_IP_WORKFLOW_EXTERNAL_FIXTURES_ROOT = 'D:/vibe-demo/fixtures';
 const SCRIPTED_IP_WORKFLOW_FIXTURES_DIR = 'fixtures';
 const SCRIPTED_IP_WORKFLOW_FIXTURES_CURRENT_DIR = 'current';
@@ -90,20 +91,21 @@ const SCRIPTED_IP_WORKFLOW_FIXTURE_MANIFEST_FILE = 'manifest.json';
 const SCRIPTED_IP_WORKFLOW_ASSETS_DIR = 'assets';
 const SCRIPTED_IP_WORKFLOW_ASSET_NOTES_FILE = 'asset-notes.md';
 const SCRIPTED_IP_TEMPLATE_RELATIVE_PATH = 'resources/chat-templates/line-art-ip-product.html';
+const SCRIPTED_IP_KNOWLEDGE_BASE_RELATIVE_PATH = 'resources/chat-templates/orange-leaf-knowledge-base.json';
 const SCRIPTED_IP_WORKFLOW_THINK_DELAY = 4200;
 const SCRIPTED_IP_WORKFLOW_STEP_DELAY = 3200;
+const SCRIPTED_IP_WORKFLOW_PLAN_THINK_DELAY = 2500;
+const SCRIPTED_IP_WORKFLOW_PLAN_STEP_DELAY = 1875;
 const SCRIPTED_IP_WORKFLOW_SECTION_TOTAL_DELAY = 5000;
 const SCRIPTED_IP_WORKFLOW_SECTION_UPDATES = 24;
 const SCRIPTED_IP_CONFIRMATION_WORDS = ['可以', '继续', '开始', '开始做', '按这个来', '确认', '没问题', '就这样', '开始创建', '按这个计划开始'];
-const SCRIPTED_IP_UI_FIX_WORDS = ['修复ui', '修复UI'];
-const SCRIPTED_IP_FEATURE_WORD = '功能';
+const SCRIPTED_IP_UI_FIX_WORDS = ['修复'];
 const SCRIPTED_IP_IMAGE_FIX_COMMAND = '优化图片上传策略：自动压缩到长边 1536 以内，并控制在 4MB 内';
 const SCRIPTED_IP_IMAGE_FIX_WORDS = [SCRIPTED_IP_IMAGE_FIX_COMMAND, '图片自动压缩到1536和4m以内', '凡事上传的图片都需要被你自动压缩到长边为1536以下，然后再压缩到4M以内'];
 const SCRIPTED_IP_LAUNCHER_FILE = 'start-preview.bat';
 const SCRIPTED_IP_PREVIEW_SERVER_FILE = 'preview_server.py';
 const SCRIPTED_IP_LAUNCHER_SUGGESTION_WORDS = ['配置一键预览脚本', '创建一键预览脚本', '配置启动脚本', '创建启动脚本', '配置预览工具', '创建预览工具'];
-const SCRIPTED_IP_FIXTURE_IP_IMAGE_FILES = ['ip-01.svg', 'ip-02.svg', 'ip-03.svg', 'ip-04.svg'] as const;
-const SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES = ['final-01.svg', 'final-02.svg', 'final-03.svg', 'final-04.svg'] as const;
+const SCRIPTED_IP_KNOWLEDGE_BASE_WORDS = ['知识库'];
 
 type ScriptedWorkflowPlanStep = 'scenario' | 'focus' | 'pace' | 'confirm';
 type ScriptedWorkflowScenarioOption = 'brandProposal' | 'commerceConversion' | 'launchShowcase';
@@ -236,12 +238,14 @@ interface IScriptedWorkflow {
 	readonly readmeFile: URI;
 	readonly dataDirectory: URI;
 	readonly planFile: URI;
+	readonly knowledgeBaseFile: URI;
 	readonly fixturesDirectory: URI;
 	readonly currentFixturesDirectory: URI;
 	readonly fixtureManifestFile: URI;
 	readonly assetsDirectory: URI;
 	readonly assetNotesFile: URI;
 	readonly templateSource: URI;
+	readonly knowledgeBaseSource: URI;
 }
 
 interface IScriptedWorkflowTemplateSections {
@@ -258,10 +262,19 @@ interface IScriptedWorkflowProjectFiles {
 	readonly css: string;
 	readonly js: string;
 	readonly planJson: string;
+	readonly knowledgeBaseJson?: string;
 	readonly readme: string;
-	readonly fixtureManifestJson: string;
-	readonly fixtureAssets: readonly { filename: string; content: string }[];
 	readonly assetNotes: string;
+}
+
+interface IScriptedWorkflowFixtureManifestEntry {
+	readonly image?: string;
+}
+
+interface IScriptedWorkflowFixtureManifest {
+	readonly ip: readonly IScriptedWorkflowFixtureManifestEntry[];
+	readonly poster: readonly IScriptedWorkflowFixtureManifestEntry[];
+	readonly final: readonly IScriptedWorkflowFixtureManifestEntry[];
 }
 
 export class SetupAgent extends Disposable implements IChatAgentImplementation {
@@ -988,19 +1001,19 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		}
 
 		if (state.phase === 'done') {
+			if (state.workflowVersion === 'v2') {
+				return [
+					createFollowup('接入知识库', '知识库', '升级到 V3，接入品牌、合规与行业术语摘要。'),
+					...(!state.launcherCreated
+						? [createFollowup('配置一键预览脚本', '配置一键预览脚本', '生成 start-preview.bat，一键启动 Python 本地服务并打开页面。')]
+						: [createFollowup('继续优化页面', '继续优化页面', '继续补充页面动效、文案或结构。')])
+				];
+			}
+
 			if (state.launcherConfirmationPending && !state.launcherCreated) {
 				return [
 					createFollowup('确认创建启动脚本', '确认创建启动脚本', '在 vibe-demo 目录中生成一键启动本地预览的 BAT。'),
 					createFollowup('先不配置', '先不配置', '暂时跳过本地预览启动脚本。')
-				];
-			}
-
-			if (state.workflowVersion === 'v2') {
-				return [
-					createFollowup('功能增强版', SCRIPTED_IP_FEATURE_WORD, '生成包含 IP 风格选择窗口的 v3。'),
-					state.launcherCreated
-						? createFollowup('继续优化页面', '继续优化页面', '继续补充页面动效、文案或结构。')
-						: createFollowup('配置一键预览脚本', '配置一键预览脚本', '生成 start-preview.bat，一键启动 Python 本地服务并打开页面。')
 				];
 			}
 
@@ -1069,17 +1082,26 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				}
 			}
 
-			if (sessionState.workflowVersion === 'v2' && this.isScriptedWorkflowFeatureRequest(request.message)) {
-				sessionState.workflowVersion = 'v3';
-				sessionState.awaitingFixes = false;
-				sessionState.readyForSecondVersion = false;
-				sessionState.phase = 'scoping';
-				sessionState.fileCreated = false;
-				sessionState.treeShown = false;
-				sessionState.writeCompleted = false;
-				sessionState.launcherConfirmationPending = false;
-				await this.runScriptedWorkflow(this.reviveScriptedWorkflow(sessionState.targetDirectory), request.sessionResource, request.message, progress);
-				return true;
+			if (this.isScriptedWorkflowKnowledgeBaseRequest(request.message)) {
+				if (sessionState.workflowVersion === 'v2') {
+					sessionState.workflowVersion = 'v3';
+					sessionState.awaitingFixes = false;
+					sessionState.phase = 'scoping';
+					sessionState.fileCreated = false;
+					sessionState.treeShown = false;
+					sessionState.writeCompleted = false;
+					sessionState.launcherConfirmationPending = false;
+					await this.runScriptedWorkflow(this.reviveScriptedWorkflow(sessionState.targetDirectory), request.sessionResource, request.message, progress);
+					return true;
+				}
+
+				if (sessionState.workflowVersion === 'v3') {
+					progress({
+						kind: 'markdownContent',
+						content: new MarkdownString('知识库已经接入当前 V3 页面，无需重复升级。')
+					});
+					return true;
+				}
 			}
 
 			if (sessionState.launcherConfirmationPending && this.isScriptedWorkflowLauncherConfirmation(request.message)) {
@@ -1183,7 +1205,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 
 	private isScriptedWorkflowUiFixRequest(message: string): boolean {
 		const normalizedMessage = this.normalizeScriptedWorkflowMessage(message);
-		return normalizedMessage.includes('修复ui') || SCRIPTED_IP_UI_FIX_WORDS.some(word => normalizedMessage === this.normalizeScriptedWorkflowMessage(word));
+		return normalizedMessage.includes('修复') || SCRIPTED_IP_UI_FIX_WORDS.some(word => normalizedMessage === this.normalizeScriptedWorkflowMessage(word));
 	}
 
 	private isScriptedWorkflowImageFixRequest(message: string): boolean {
@@ -1191,8 +1213,9 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		return normalizedMessage.includes('4mb') || SCRIPTED_IP_IMAGE_FIX_WORDS.some(word => normalizedMessage === this.normalizeScriptedWorkflowMessage(word));
 	}
 
-	private isScriptedWorkflowFeatureRequest(message: string): boolean {
-		return this.normalizeScriptedWorkflowMessage(message) === this.normalizeScriptedWorkflowMessage(SCRIPTED_IP_FEATURE_WORD);
+	private isScriptedWorkflowKnowledgeBaseRequest(message: string): boolean {
+		const normalizedMessage = this.normalizeScriptedWorkflowMessage(message);
+		return SCRIPTED_IP_KNOWLEDGE_BASE_WORDS.some(word => normalizedMessage.includes(this.normalizeScriptedWorkflowMessage(word)));
 	}
 
 	private normalizeScriptedWorkflowMessage(message: string): string {
@@ -1264,6 +1287,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		const readmeFile = URI.joinPath(targetDirectory, SCRIPTED_IP_WORKFLOW_README_FILE);
 		const dataDirectory = URI.joinPath(targetDirectory, SCRIPTED_IP_WORKFLOW_DATA_DIR);
 		const planFile = URI.joinPath(dataDirectory, SCRIPTED_IP_WORKFLOW_PLAN_FILE);
+		const knowledgeBaseFile = URI.joinPath(dataDirectory, SCRIPTED_IP_WORKFLOW_KNOWLEDGE_BASE_FILE);
 		const fixturesDirectory = URI.file(SCRIPTED_IP_WORKFLOW_EXTERNAL_FIXTURES_ROOT);
 		const currentFixturesDirectory = URI.joinPath(fixturesDirectory, SCRIPTED_IP_WORKFLOW_FIXTURES_CURRENT_DIR);
 		const fixtureManifestFile = URI.joinPath(currentFixturesDirectory, SCRIPTED_IP_WORKFLOW_FIXTURE_MANIFEST_FILE);
@@ -1278,12 +1302,14 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			readmeFile,
 			dataDirectory,
 			planFile,
+			knowledgeBaseFile,
 			fixturesDirectory,
 			currentFixturesDirectory,
 			fixtureManifestFile,
 			assetsDirectory,
 			assetNotesFile,
-			templateSource: this.getScriptedWorkflowTemplateSource()
+			templateSource: this.getScriptedWorkflowTemplateSource(),
+			knowledgeBaseSource: this.getScriptedWorkflowKnowledgeBaseSource()
 		};
 	}
 
@@ -1297,18 +1323,25 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			readmeFile: URI.joinPath(targetDirectory, SCRIPTED_IP_WORKFLOW_README_FILE),
 			dataDirectory: URI.joinPath(targetDirectory, SCRIPTED_IP_WORKFLOW_DATA_DIR),
 			planFile: URI.joinPath(URI.joinPath(targetDirectory, SCRIPTED_IP_WORKFLOW_DATA_DIR), SCRIPTED_IP_WORKFLOW_PLAN_FILE),
+			knowledgeBaseFile: URI.joinPath(URI.joinPath(targetDirectory, SCRIPTED_IP_WORKFLOW_DATA_DIR), SCRIPTED_IP_WORKFLOW_KNOWLEDGE_BASE_FILE),
 			fixturesDirectory: URI.file(SCRIPTED_IP_WORKFLOW_EXTERNAL_FIXTURES_ROOT),
 			currentFixturesDirectory: URI.joinPath(URI.file(SCRIPTED_IP_WORKFLOW_EXTERNAL_FIXTURES_ROOT), SCRIPTED_IP_WORKFLOW_FIXTURES_CURRENT_DIR),
 			fixtureManifestFile: URI.joinPath(URI.joinPath(URI.file(SCRIPTED_IP_WORKFLOW_EXTERNAL_FIXTURES_ROOT), SCRIPTED_IP_WORKFLOW_FIXTURES_CURRENT_DIR), SCRIPTED_IP_WORKFLOW_FIXTURE_MANIFEST_FILE),
 			assetsDirectory: URI.joinPath(targetDirectory, SCRIPTED_IP_WORKFLOW_ASSETS_DIR),
 			assetNotesFile: URI.joinPath(URI.joinPath(targetDirectory, SCRIPTED_IP_WORKFLOW_ASSETS_DIR), SCRIPTED_IP_WORKFLOW_ASSET_NOTES_FILE),
-			templateSource: this.getScriptedWorkflowTemplateSource()
+			templateSource: this.getScriptedWorkflowTemplateSource(),
+			knowledgeBaseSource: this.getScriptedWorkflowKnowledgeBaseSource()
 		};
 	}
 
 	private getScriptedWorkflowTemplateSource(): URI {
 		const appRoot = (this.environmentService as IWorkbenchEnvironmentService & { appRoot: string }).appRoot;
 		return URI.file(join(appRoot, ...SCRIPTED_IP_TEMPLATE_RELATIVE_PATH.split('/')));
+	}
+
+	private getScriptedWorkflowKnowledgeBaseSource(): URI {
+		const appRoot = (this.environmentService as IWorkbenchEnvironmentService & { appRoot: string }).appRoot;
+		return URI.file(join(appRoot, ...SCRIPTED_IP_KNOWLEDGE_BASE_RELATIVE_PATH.split('/')));
 	}
 
 	private getScriptedWorkflowPlanStepPrompt(planStep: ScriptedWorkflowPlanStep): string {
@@ -1396,7 +1429,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			content: new MarkdownString(isRevision ? '正在根据你刚才的选择重整实现计划。' : '正在分析需求并整理实现方案。'),
 			shimmer: true
 		});
-		await timeout(SCRIPTED_IP_WORKFLOW_THINK_DELAY);
+		await timeout(SCRIPTED_IP_WORKFLOW_PLAN_THINK_DELAY);
 
 		progress({
 			kind: 'markdownContent',
@@ -1418,7 +1451,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				selectedPace ? `  ${selectedPace.summary}` : '  这一步会决定执行时是标准推进、细节增强，还是演示感更强的渐进生成。'
 			].join('\n'))
 		});
-		await timeout(SCRIPTED_IP_WORKFLOW_STEP_DELAY);
+		await timeout(SCRIPTED_IP_WORKFLOW_PLAN_STEP_DELAY);
 
 		progress({
 			kind: 'markdownContent',
@@ -1433,7 +1466,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				'7. 最后再做一轮结构检查、结果整理和输出确认，确保页面可继续完善。'
 			].join('\n'))
 		});
-		await timeout(SCRIPTED_IP_WORKFLOW_STEP_DELAY);
+		await timeout(SCRIPTED_IP_WORKFLOW_PLAN_STEP_DELAY);
 
 		progress({
 			kind: 'markdownContent',
@@ -1444,14 +1477,14 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				'- 上传区：素材上传、配置输入、生成入口。',
 				'- IP 构筑区：4 个候选 IP 方案与唯一 IP 确认动作。',
 				'- 海报方案区：4 个海报方案、提示词编辑、重生成入口。',
-				'- 终稿输出区：4 个终稿卡片、导出说明与最终导出动作。',
+				'- 终稿输出区：5 个终稿卡片、导出说明与最终导出动作。',
 				'',
 				selectedScenario ? `页面定位决定：${selectedScenario.impact}` : '页面定位暂未确定，所以我先保留三种路径的弹性空间。',
 				selectedFocus ? `展示重心决定：${selectedFocus.impact}` : '展示重心暂未确定，所以我先按均衡骨架做 plan 收敛。',
 				selectedPace ? `生成节奏决定：${selectedPace.impact}` : '生成节奏暂未确定，所以执行细节先保持可调整状态。'
 			].join('\n'))
 		});
-		await timeout(SCRIPTED_IP_WORKFLOW_STEP_DELAY);
+		await timeout(SCRIPTED_IP_WORKFLOW_PLAN_STEP_DELAY);
 
 		progress({
 			kind: 'markdownContent',
@@ -1466,7 +1499,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				'- 在你确认之前，我会先把方向收敛清楚，避免页面范围和结构反复改动。'
 			].join('\n'))
 		});
-		await timeout(SCRIPTED_IP_WORKFLOW_STEP_DELAY);
+		await timeout(SCRIPTED_IP_WORKFLOW_PLAN_STEP_DELAY);
 
 		progress({
 			kind: 'markdownContent',
@@ -1541,10 +1574,10 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			kind: 'progressMessage',
 			content: new MarkdownString(
 				state.workflowVersion === 'v3'
-					? localize('customKeywordResponse.ip.executionFeatureStart', "已收到“功能”，开始整理功能增强版页面。")
+					? localize('customKeywordResponse.ip.executionKnowledgeBaseStart', "已收到知识库升级要求，开始整理 V3 页面与品牌合规数据。")
 					: state.workflowVersion === 'v2'
-					? localize('customKeywordResponse.ip.executionRevisionStart', "已收到这轮修订反馈，开始整理修正版页面。")
-					: localize('customKeywordResponse.ip.executionStart', "已收到确认“{0}”，开始进入页面创建阶段。", confirmationMessage.trim() || localize('customKeywordResponse.ip.confirmationFallback', "继续"))
+						? localize('customKeywordResponse.ip.executionRevisionStart', "已收到这轮修订反馈，开始整理修正版页面。")
+						: localize('customKeywordResponse.ip.executionStart', "已收到确认“{0}”，开始进入页面创建阶段。", confirmationMessage.trim() || localize('customKeywordResponse.ip.confirmationFallback', "继续"))
 			),
 			shimmer: true
 		});
@@ -1573,11 +1606,31 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		});
 		await timeout(SCRIPTED_IP_WORKFLOW_STEP_DELAY);
 
+		try {
+			await this.validateScriptedWorkflowFixtures(workflow);
+		} catch (error) {
+			this.logService.error('[chat setup] Failed to validate scripted workflow fixtures.', error);
+			progress({
+				kind: 'warning',
+				content: new MarkdownString(localize(
+					'customKeywordResponse.ip.fixtureValidationFailed',
+					"无法读取固定演示素材，已停止当前生成流程。请检查 `D:/vibe-demo/fixtures/current/manifest.json` 及其引用图片。错误：{0}",
+					toErrorMessage(error)
+				))
+			});
+			return;
+		}
+
 		let templateContent: string;
+		let knowledgeBaseJson: string | undefined;
 		let projectFiles: IScriptedWorkflowProjectFiles;
 		try {
 			templateContent = await this.readFileContent(workflow.templateSource);
-			projectFiles = this.createScriptedWorkflowProjectFiles(templateContent, state.selections, state.workflowVersion);
+			if (state.workflowVersion === 'v3') {
+				knowledgeBaseJson = await this.readFileContent(workflow.knowledgeBaseSource);
+				this.validateScriptedWorkflowKnowledgeBase(knowledgeBaseJson);
+			}
+			projectFiles = this.createScriptedWorkflowProjectFiles(templateContent, state.selections, state.workflowVersion, knowledgeBaseJson);
 		} catch (error) {
 			this.logService.error('[chat setup] Failed to read scripted template.', error);
 			progress({
@@ -1609,14 +1662,6 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			await this.fileService.createFolder(workflow.dataDirectory);
 		}
 
-		if (!await this.fileService.exists(workflow.fixturesDirectory)) {
-			await this.fileService.createFolder(workflow.fixturesDirectory);
-		}
-
-		if (!await this.fileService.exists(workflow.currentFixturesDirectory)) {
-			await this.fileService.createFolder(workflow.currentFixturesDirectory);
-		}
-
 		if (!await this.fileService.exists(workflow.assetsDirectory)) {
 			await this.fileService.createFolder(workflow.assetsDirectory);
 		}
@@ -1632,10 +1677,10 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		const styleFileExists = await this.fileService.exists(workflow.styleFile);
 		const scriptFileExists = await this.fileService.exists(workflow.scriptFile);
 		const planFileExists = await this.fileService.exists(workflow.planFile);
+		const knowledgeBaseFileExists = await this.fileService.exists(workflow.knowledgeBaseFile);
 		const readmeFileExists = await this.fileService.exists(workflow.readmeFile);
-		const fixtureManifestFileExists = await this.fileService.exists(workflow.fixtureManifestFile);
 		const assetNotesFileExists = await this.fileService.exists(workflow.assetNotesFile);
-		const useRevisionPatch = state.workflowVersion !== 'v1' && fileExists && styleFileExists && scriptFileExists;
+		const useRevisionPatch = state.workflowVersion === 'v2' && fileExists && styleFileExists && scriptFileExists;
 		state.phase = 'draftingStructure';
 		progress({
 			kind: 'progressMessage',
@@ -1656,10 +1701,9 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 
 		progress({
 			kind: 'progressMessage',
-			content: new MarkdownString(localize(
-				fileExists ? 'customKeywordResponse.ip.openingFile' : 'customKeywordResponse.ip.creatingFile',
-				fileExists ? "正在整理输出文件并准备继续完善。" : "正在创建页面项目文件。"
-			)),
+			content: new MarkdownString(fileExists
+				? localize('customKeywordResponse.ip.openingFile', "正在整理输出文件并准备继续完善。")
+				: localize('customKeywordResponse.ip.creatingFile', "正在创建页面项目文件。")),
 			shimmer: true
 		});
 		await timeout(SCRIPTED_IP_WORKFLOW_STEP_DELAY);
@@ -1681,12 +1725,10 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		await ensureTextFile(workflow.styleFile, styleFileExists);
 		await ensureTextFile(workflow.scriptFile, scriptFileExists);
 		await ensureTextFile(workflow.planFile, planFileExists);
-		await ensureTextFile(workflow.readmeFile, readmeFileExists);
-		await ensureTextFile(workflow.fixtureManifestFile, fixtureManifestFileExists);
-		for (const fixtureAsset of projectFiles.fixtureAssets) {
-			const fixtureAssetFile = URI.joinPath(workflow.currentFixturesDirectory, fixtureAsset.filename);
-			await ensureTextFile(fixtureAssetFile, await this.fileService.exists(fixtureAssetFile));
+		if (projectFiles.knowledgeBaseJson !== undefined) {
+			await ensureTextFile(workflow.knowledgeBaseFile, knowledgeBaseFileExists);
 		}
+		await ensureTextFile(workflow.readmeFile, readmeFileExists);
 		await ensureTextFile(workflow.assetNotesFile, assetNotesFileExists);
 
 		await this.openScriptedWorkflowEditor(workflow.targetFile);
@@ -1702,7 +1744,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		if (!state.treeShown) {
 			progress({
 				kind: 'treeData',
-				treeData: this.createScriptedWorkflowTreeData(workflow, state.launcherCreated ? state.launcherFile : undefined)
+				treeData: this.createScriptedWorkflowTreeData(workflow, state.launcherCreated ? state.launcherFile : undefined, state.workflowVersion === 'v3')
 			});
 			state.treeShown = true;
 		}
@@ -1745,44 +1787,43 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		state.launcherConfirmationPending = state.workflowVersion === 'v1' && !state.launcherCreated;
 		state.awaitingFixes = state.workflowVersion === 'v1';
 		state.readyForSecondVersion = false;
-		const doneMessage = state.workflowVersion === 'v3'
-			? [
-				state.fileCreated ? "`vibe-demo` 页面目录已整理为功能增强版。" : "`vibe-demo` 页面目录已升级为功能增强版。",
-				"",
-				"- 当前入口、样式层、交互逻辑和配置文件已经同步更新。",
-				`- 页面入口：\`${SCRIPTED_IP_WORKFLOW_DIR}/${SCRIPTED_IP_WORKFLOW_FILE}\``,
-				`- 配套文件：\`${SCRIPTED_IP_WORKFLOW_STYLE_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_SCRIPT_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_DATA_DIR}/${SCRIPTED_IP_WORKFLOW_PLAN_FILE}\``,
-				"- 这版保留上传区布局修复、图片预处理，并新增 IP 生成风格选择窗口。",
-				"",
-				"后续可以继续补本地预览入口，或者再把页面功能联动得更完整。"
-			].join('\n')
+		const finalMessage = state.workflowVersion === 'v3'
+			? localize(
+				'customKeywordResponse.ip.doneKnowledgeBase',
+				"`vibe-demo` 页面已经升级为 V3 知识库版本。\n\n- 页面顶部已接入品牌知识库按钮与三分类摘要。\n- 知识数据：`{0}/{1}`\n- 提示词与终稿生成已加入知识库读取动画，结果仍直接读取固定 manifest 与图片。\n- 外部演示素材仍保持只读，不会被当前流程修改。",
+				SCRIPTED_IP_WORKFLOW_DATA_DIR,
+				SCRIPTED_IP_WORKFLOW_KNOWLEDGE_BASE_FILE
+			)
 			: state.workflowVersion === 'v2'
-			? [
-				state.fileCreated ? "`vibe-demo` 页面目录已整理为当前修订版。" : "`vibe-demo` 页面目录已根据反馈完成修订。",
-				"",
-				"- 当前入口、样式层、交互逻辑和配置文件已经同步更新。",
-				`- 页面入口：\`${SCRIPTED_IP_WORKFLOW_DIR}/${SCRIPTED_IP_WORKFLOW_FILE}\``,
-				`- 配套文件：\`${SCRIPTED_IP_WORKFLOW_STYLE_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_SCRIPT_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_DATA_DIR}/${SCRIPTED_IP_WORKFLOW_PLAN_FILE}\``,
-				"- 这版只保留界面整理和上传处理策略，不包含 IP 风格选择弹窗。",
-				"",
-				"如果要进入功能增强版，可以输入 `功能`，我会生成带 IP 风格选择窗口的 v3。"
-			].join('\n')
-			: [
-				state.fileCreated ? "`vibe-demo` 页面目录已创建完成。" : "`vibe-demo` 页面目录已更新完成。",
-				"",
-				"- 页面主体、样式层、交互逻辑和基础配置已经整理完成。",
-				`- 当前入口文件：\`${SCRIPTED_IP_WORKFLOW_DIR}/${SCRIPTED_IP_WORKFLOW_FILE}\``,
-				`- 配套文件：\`${SCRIPTED_IP_WORKFLOW_STYLE_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_SCRIPT_FILE}\`、\`${SCRIPTED_IP_WORKFLOW_DATA_DIR}/${SCRIPTED_IP_WORKFLOW_PLAN_FILE}\``,
-				"- 建议先补本地预览入口，方便直接演示当前页面效果。",
-				"",
-				"如果你确认，我下一步先把 `start-preview.bat` 配好；后面再根据界面反馈和上传策略要求继续修订。"
-			].join('\n');
+				? localize(
+					'customKeywordResponse.ip.doneRevision',
+					"{0}\n\n- 当前入口、样式层、交互逻辑和配置文件已经同步更新。\n- 页面入口：`{1}/{2}`\n- 配套文件：`{3}`、`{4}`、`{5}/{6}`\n- 这版已经把界面整理和上传处理策略一并纳入当前实现。\n\n如果要接入品牌与合规知识库，请发送“知识库”升级到 V3。",
+					state.fileCreated
+						? localize('customKeywordResponse.ip.doneRevisionCreated', "`vibe-demo` 页面目录已整理为当前修订版。")
+						: localize('customKeywordResponse.ip.doneRevisionUpdated', "`vibe-demo` 页面目录已根据反馈完成修订。"),
+					SCRIPTED_IP_WORKFLOW_DIR,
+					SCRIPTED_IP_WORKFLOW_FILE,
+					SCRIPTED_IP_WORKFLOW_STYLE_FILE,
+					SCRIPTED_IP_WORKFLOW_SCRIPT_FILE,
+					SCRIPTED_IP_WORKFLOW_DATA_DIR,
+					SCRIPTED_IP_WORKFLOW_PLAN_FILE
+				)
+				: localize(
+					'customKeywordResponse.ip.done',
+					"{0}\n\n- 页面主体、样式层、交互逻辑和基础配置已经整理完成。\n- 当前入口文件：`{1}/{2}`\n- 配套文件：`{3}`、`{4}`、`{5}/{6}`\n- 建议先补本地预览入口，方便直接演示当前页面效果。\n\n如果你确认，我下一步先把 `start-preview.bat` 配好；后面再根据界面反馈和上传策略要求继续修订。",
+					state.fileCreated
+						? localize('customKeywordResponse.ip.doneCreated', "`vibe-demo` 页面目录已创建完成。")
+						: localize('customKeywordResponse.ip.doneUpdated', "`vibe-demo` 页面目录已更新完成。"),
+					SCRIPTED_IP_WORKFLOW_DIR,
+					SCRIPTED_IP_WORKFLOW_FILE,
+					SCRIPTED_IP_WORKFLOW_STYLE_FILE,
+					SCRIPTED_IP_WORKFLOW_SCRIPT_FILE,
+					SCRIPTED_IP_WORKFLOW_DATA_DIR,
+					SCRIPTED_IP_WORKFLOW_PLAN_FILE
+				);
 		progress({
 			kind: 'markdownContent',
-			content: new MarkdownString(localize(
-				state.workflowVersion === 'v3' ? 'customKeywordResponse.ip.doneFeature' : state.workflowVersion === 'v2' ? 'customKeywordResponse.ip.doneRevision' : 'customKeywordResponse.ip.done',
-				doneMessage
-			))
+			content: new MarkdownString(finalMessage)
 		});
 	}
 
@@ -1858,7 +1899,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		});
 		progress({
 			kind: 'treeData',
-			treeData: this.createScriptedWorkflowTreeData(this.reviveScriptedWorkflow(state.targetDirectory), state.launcherFile)
+			treeData: this.createScriptedWorkflowTreeData(this.reviveScriptedWorkflow(state.targetDirectory), state.launcherFile, state.workflowVersion === 'v3')
 		});
 		await timeout(SCRIPTED_IP_WORKFLOW_STEP_DELAY);
 
@@ -1891,51 +1932,140 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		return this.readFileContent(resource);
 	}
 
-	private createScriptedWorkflowProjectFiles(templateContent: string, selections: IScriptedWorkflowPlanSelections, workflowVersion: ScriptedWorkflowVersion): IScriptedWorkflowProjectFiles {
+	private async validateScriptedWorkflowFixtures(workflow: IScriptedWorkflow): Promise<void> {
+		if (!await this.fileService.exists(workflow.fixtureManifestFile)) {
+			throw new Error('固定演示素材清单不存在。');
+		}
+
+		const manifestContent = await this.readFileContent(workflow.fixtureManifestFile);
+		let parsedManifest: unknown;
+		try {
+			parsedManifest = JSON.parse(manifestContent);
+		} catch {
+			throw new Error('固定演示素材清单不是有效的 JSON。');
+		}
+
+		if (!this.isScriptedWorkflowFixtureManifest(parsedManifest)) {
+			throw new Error('固定演示素材清单必须包含有效的 ip、poster 和 final 数组。');
+		}
+
+		if (!parsedManifest.ip.length || !parsedManifest.final.length) {
+			throw new Error('固定演示素材清单必须至少包含一个 IP 结果和一个终稿结果。');
+		}
+
+		for (const entry of [...parsedManifest.ip, ...parsedManifest.final]) {
+			if (!entry.image) {
+				throw new Error('IP 和终稿结果必须引用本地图片文件。');
+			}
+		}
+
+		const imagePaths = new Set<string>();
+		for (const entry of [...parsedManifest.ip, ...parsedManifest.poster, ...parsedManifest.final]) {
+			if (entry.image) {
+				imagePaths.add(entry.image);
+			}
+		}
+
+		for (const imagePath of imagePaths) {
+			const imageResource = this.resolveScriptedWorkflowFixtureImage(workflow, imagePath);
+			if (!await this.fileService.exists(imageResource)) {
+				throw new Error(`固定演示素材图片不存在：${imagePath}`);
+			}
+		}
+	}
+
+	private isScriptedWorkflowFixtureManifest(value: unknown): value is IScriptedWorkflowFixtureManifest {
+		if (!this.isScriptedWorkflowFixtureRecord(value)) {
+			return false;
+		}
+
+		const stages = ['ip', 'poster', 'final'] as const;
+		return stages.every(stage => Array.isArray(value[stage]) && value[stage].every(entry => this.isScriptedWorkflowFixtureManifestEntry(entry)));
+	}
+
+	private isScriptedWorkflowFixtureManifestEntry(value: unknown): value is IScriptedWorkflowFixtureManifestEntry {
+		if (!this.isScriptedWorkflowFixtureRecord(value)) {
+			return false;
+		}
+
+		return value.image === undefined || (typeof value.image === 'string' && value.image.trim().length > 0);
+	}
+
+	private isScriptedWorkflowFixtureRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null && !Array.isArray(value);
+	}
+
+	private resolveScriptedWorkflowFixtureImage(workflow: IScriptedWorkflow, imagePath: string): URI {
+		const normalizedPath = imagePath.replace(/\\/g, '/');
+		const pathSegments = normalizedPath.split('/').filter(segment => segment !== '.');
+		if (
+			!normalizedPath ||
+			normalizedPath.startsWith('/') ||
+			/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(normalizedPath) ||
+			!pathSegments.length ||
+			pathSegments.some(segment => !segment || segment === '..')
+		) {
+			throw new Error(`固定演示素材图片必须使用 current 目录内的相对路径：${imagePath}`);
+		}
+
+		return URI.joinPath(workflow.currentFixturesDirectory, ...pathSegments);
+	}
+
+	private validateScriptedWorkflowKnowledgeBase(content: string): void {
+		let value: unknown;
+		try {
+			value = JSON.parse(content);
+		} catch {
+			throw new Error('The scripted workflow knowledge base is not valid JSON.');
+		}
+
+		if (!this.isScriptedWorkflowFixtureRecord(value) || value.version !== 'v3' || !Array.isArray(value.categories)) {
+			throw new Error('The scripted workflow knowledge base must contain a V3 category list.');
+		}
+
+		const requiredCategoryIds = ['brand', 'compliance', 'terms'];
+		for (const categoryId of requiredCategoryIds) {
+			const category = value.categories.find(candidate => this.isScriptedWorkflowFixtureRecord(candidate) && candidate.id === categoryId);
+			if (
+				!this.isScriptedWorkflowFixtureRecord(category)
+				|| typeof category.title !== 'string'
+				|| typeof category.summary !== 'string'
+				|| !Array.isArray(category.items)
+				|| !category.items.length
+				|| !category.items.every(item => this.isScriptedWorkflowFixtureRecord(item) && typeof item.title === 'string' && typeof item.content === 'string')
+			) {
+				throw new Error(`The scripted workflow knowledge category is invalid: ${categoryId}`);
+			}
+		}
+
+	}
+
+	private createScriptedWorkflowProjectFiles(templateContent: string, selections: IScriptedWorkflowPlanSelections, workflowVersion: ScriptedWorkflowVersion, knowledgeBaseJson?: string): IScriptedWorkflowProjectFiles {
+		if (workflowVersion === 'v3' && knowledgeBaseJson === undefined) {
+			throw new Error('V3 scripted workflow generation requires a knowledge-base snapshot.');
+		}
+
 		const sourceSections = this.splitScriptedWorkflowTemplate(templateContent);
 		const css = this.createScriptedWorkflowCss(this.extractScriptedWorkflowStyle(sourceSections.shell), workflowVersion);
 		const js = this.createScriptedWorkflowJs(this.extractScriptedWorkflowScript(sourceSections.footer), workflowVersion);
-		const fixtureManifestJson = this.createScriptedWorkflowFixtureManifest();
-		const fixtureAssets = this.createScriptedWorkflowFixtureAssets();
 		const htmlSections: IScriptedWorkflowTemplateSections = {
-			shell: this.rewriteScriptedWorkflowShell(sourceSections.shell),
+			shell: this.createScriptedWorkflowShell(this.rewriteScriptedWorkflowShell(sourceSections.shell), workflowVersion),
 			inputSection: this.createScriptedWorkflowInputSection(sourceSections.inputSection, workflowVersion),
-			buildSection: sourceSections.buildSection,
-			layoutSection: sourceSections.layoutSection,
+			buildSection: this.createScriptedWorkflowBuildSection(sourceSections.buildSection, workflowVersion),
+			layoutSection: this.createScriptedWorkflowLayoutSection(sourceSections.layoutSection, workflowVersion),
 			outputSection: sourceSections.outputSection,
-			footer: '\n  <script src="./app.js?v=20260410-preview-fix"></script>\n</body>\n</html>\n'
+			footer: `\n  <script src="./app.js?v=${workflowVersion}-knowledge-flow"></script>\n</body>\n</html>\n`
 		};
 
 		const scenario = this.getScriptedWorkflowSelectedOption(SCRIPTED_IP_SCENARIO_OPTIONS, selections.scenario);
 		const focus = this.getScriptedWorkflowSelectedOption(SCRIPTED_IP_FOCUS_OPTIONS, selections.focus);
 		const pace = this.getScriptedWorkflowSelectedOption(SCRIPTED_IP_PACE_OPTIONS, selections.pace);
-		const revision = workflowVersion === 'v1'
-			? {
-				status: 'draft',
-				nextStep: 'Collect UI and upload strategy feedback before the next revision.'
-			}
-			: workflowVersion === 'v2'
-			? {
-				status: 'revised',
-				appliedUpdates: [
-					'Upload panel layout refinement',
-					'Automatic image preprocessing before generation'
-				],
-				nextStep: 'Type 功能 to generate the feature-enhanced version.'
-			}
-			: {
-				status: 'feature-enhanced',
-				appliedUpdates: [
-					'Upload panel layout refinement',
-					'Automatic image preprocessing before generation',
-					'IP style selection dialog'
-				]
-			};
 
 		return {
 			htmlSections,
 			css,
 			js,
+			knowledgeBaseJson: workflowVersion === 'v3' ? knowledgeBaseJson : undefined,
 			planJson: JSON.stringify({
 				project: 'vibe-demo',
 				output: 'vibe-demo',
@@ -1946,7 +2076,30 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 					focus: focus?.title ?? '未指定',
 					pace: pace?.title ?? '未指定'
 				},
-				revision,
+				revision: workflowVersion === 'v1'
+					? {
+						status: 'draft',
+						nextStep: 'Collect UI and upload strategy feedback before the next revision.'
+					}
+					: workflowVersion === 'v2' ? {
+						status: 'revised',
+						appliedUpdates: [
+							'Upload panel layout refinement',
+							'Automatic image preprocessing before generation'
+						]
+					} : {
+						status: 'knowledge-enabled',
+						appliedUpdates: [
+							'Bundled brand and compliance knowledge base',
+							'Knowledge-base progress presentation with fixture-only results',
+							'Ten-second prompt and final generation progress animations'
+						]
+					},
+				knowledgeBase: workflowVersion === 'v3' ? {
+					file: `${SCRIPTED_IP_WORKFLOW_DATA_DIR}/${SCRIPTED_IP_WORKFLOW_KNOWLEDGE_BASE_FILE}`,
+					categories: ['品牌素材库', '合规规则库', '行业术语库'],
+					priority: '合规规则库 > 品牌素材库 > 行业术语库'
+				} : undefined,
 				preview: {
 					entry: 'index.html',
 					url: 'http://127.0.0.1:5500/'
@@ -1962,7 +2115,8 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				'- `styles.css`: visual system and layout',
 				'- `app.js`: interaction logic',
 				'- `data/plan.json`: generation plan snapshot',
-				'- `D:/vibe-demo/fixtures/current/manifest.json`: presentation result manifest',
+				...(workflowVersion === 'v3' ? ['- `data/knowledge-base.json`: bundled read-only brand and compliance knowledge snapshot'] : []),
+				'- `D:/vibe-demo/fixtures/current/manifest.json`: read-only presentation result manifest',
 				'- `assets/asset-notes.md`: asset placement notes',
 				'',
 				`## Revision`,
@@ -1971,75 +2125,92 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				'## Preview',
 				'- Double-click `start-preview.bat` after it is created, or serve this directory with a local static server.'
 			].join('\n') + '\n',
-			fixtureManifestJson,
-			fixtureAssets,
 			assetNotes: [
 				'# Assets',
 				'',
 				'- Put reference IP images here.',
 				'- Put product packshots or transparent PNG assets here.',
 				'- Keep exported poster drafts here if you want to continue iterating.',
-				'- Edit `D:/vibe-demo/fixtures/current/manifest.json` and replace the matching image files when you want to swap the presentation results.'
+				'- `D:/vibe-demo/fixtures/current/manifest.json` and its referenced images are external read-only inputs. The generation flow validates and displays them without modifying them.'
 			].join('\n') + '\n'
 		};
 	}
 
-	private createScriptedWorkflowFixtureManifest(): string {
-		return JSON.stringify({
-			ip: [
-				{ id: 'IP 01', title: '线稿守护者', description: '保留线稿轮廓与角色识别点，强调展台首屏辨识度。', image: SCRIPTED_IP_FIXTURE_IP_IMAGE_FILES[0] },
-				{ id: 'IP 02', title: '陈列引导型', description: '角色姿态更适合带出产品陈列区与卖点说明。', image: SCRIPTED_IP_FIXTURE_IP_IMAGE_FILES[1] },
-				{ id: 'IP 03', title: '品牌故事型', description: '更突出角色气质与品牌叙事氛围，适合提案展示。', image: SCRIPTED_IP_FIXTURE_IP_IMAGE_FILES[2] },
-				{ id: 'IP 04', title: '发布展示型', description: '角色完成度更高，便于直接进入海报与终稿阶段。', image: SCRIPTED_IP_FIXTURE_IP_IMAGE_FILES[3] }
-			],
-			poster: [
-				{ id: '方案 01', title: '主视觉聚焦', description: '以产品英雄位为核心，角色作为品牌记忆点托举主卖点。', prompt: '品牌商业海报，保持已锁定 IP 角色动作与识别特征不变，产品位于视觉主轴，镜头略仰拍，中央构图，暖色高光与通透背景层次并存，强调品牌主视觉、产品质感、商业陈列节奏与成片完成度，1:1 画幅。' },
-				{ id: '方案 02', title: '互动故事感', description: '让 IP 与产品形成互动关系，适合现场讲解创意逻辑。', prompt: '品牌商业海报，沿用已锁定 IP 角色动作与轮廓，不改变构图逻辑，让角色与产品形成明确互动关系，镜头中景，背景有层次但不喧宾夺主，突出故事感、情绪灯光、产品卖点和商业传播完成度，1:1 画幅。' },
-				{ id: '方案 03', title: '信息转化型', description: '更适合电商说明与卖点拆解，结构紧凑直接。', prompt: '品牌商业海报，严格沿用已锁定 IP 形象与构图节奏，产品靠前展示，信息层级清晰，镜头平视，构图稳健，强调包装细节、卖点呈现、材质表现与即时转化感，背景克制且有高级商业质感，1:1 画幅。' },
-				{ id: '方案 04', title: '舞台发布感', description: '强化成品发布氛围，适合比赛现场做视觉收束。', prompt: '品牌商业海报，保持已锁定 IP 角色、构图和主体关系，整体以发布舞台感为导向，镜头略广角，留出呼吸空间，重点强化终稿级灯光、层次、材质、品牌氛围与展示完成度，1:1 画幅。' }
-			],
-			final: [
-				{ id: '终稿 01', title: '终稿主推版', description: '主视觉完整、适合第一屏展示。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[0] },
-				{ id: '终稿 02', title: '终稿细节版', description: '更强调材质、结构与灯光精修。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[1] },
-				{ id: '终稿 03', title: '终稿传播版', description: '适合社媒与活动延展的成片表达。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[2] },
-				{ id: '终稿 04', title: '终稿陈列版', description: '适合线下展架与终端陈列展示。', image: SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES[3] }
-			]
-		}, null, 2) + '\n';
-	}
+	private createScriptedWorkflowShell(shell: string, workflowVersion: ScriptedWorkflowVersion): string {
+		if (workflowVersion !== 'v3') {
+			return shell;
+		}
 
-	private createScriptedWorkflowFixtureAssets(): readonly { filename: string; content: string }[] {
-		const ipAssets = SCRIPTED_IP_FIXTURE_IP_IMAGE_FILES.map((filename, index) => ({
-			filename,
-			content: this.createScriptedWorkflowFixtureSvg(`IP ${String(index + 1).padStart(2, '0')}`, ['线稿锁定', '角色识别', '商业展示'][index % 3] ?? '角色展示', ['#BF5B31', '#2F6E67', '#8F341C', '#4C6658'][index % 4] ?? '#BF5B31')
-		}));
-		const finalAssets = SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES.map((filename, index) => ({
-			filename,
-			content: this.createScriptedWorkflowFixtureSvg(`Final ${String(index + 1).padStart(2, '0')}`, ['终稿主推', '终稿精修', '终稿传播', '终稿陈列'][index] ?? '终稿展示', ['#8F341C', '#2F6E67', '#805936', '#445A73'][index % 4] ?? '#8F341C')
-		}));
-		return [...ipAssets, ...finalAssets];
-	}
-
-	private createScriptedWorkflowFixtureSvg(title: string, subtitle: string, accent: string): string {
-		return [
-			'<?xml version="1.0" encoding="UTF-8"?>',
-			'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080">',
-			'  <defs>',
-			`    <linearGradient id="bg-${title.replace(/\s+/g, '-').toLowerCase()}" x1="0%" y1="0%" x2="100%" y2="100%">`,
-			`      <stop offset="0%" stop-color="${accent}" stop-opacity="0.95" />`,
-			'      <stop offset="100%" stop-color="#1D1712" stop-opacity="1" />',
-			'    </linearGradient>',
-			'  </defs>',
-			`  <rect width="1080" height="1080" rx="48" fill="url(#bg-${title.replace(/\s+/g, '-').toLowerCase()})" />`,
-			'  <circle cx="846" cy="228" r="168" fill="rgba(255,255,255,0.12)" />',
-			'  <circle cx="228" cy="848" r="204" fill="rgba(255,255,255,0.08)" />',
-			'  <rect x="110" y="118" width="860" height="844" rx="42" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)" />',
-			`  <text x="110" y="212" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="60" font-weight="700" fill="#FFF5EB">${title}</text>`,
-			`  <text x="110" y="286" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="28" font-weight="500" fill="rgba(255,245,235,0.78)">${subtitle}</text>`,
-			'  <text x="110" y="796" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="176" font-weight="800" fill="rgba(255,255,255,0.18)">BrandVision</text>',
-			'  <text x="110" y="872" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="34" font-weight="600" fill="rgba(255,245,235,0.72)">BrandVision Showcase Asset</text>',
-			'</svg>',
-			''
+		const knowledgeUi = [
+			'      </div>',
+			'      <button class="knowledge-trigger" type="button" id="knowledgeBaseButton" aria-controls="knowledgeBaseDrawer" aria-expanded="false">',
+			'        <span class="knowledge-trigger-dot" aria-hidden="true"></span>',
+			'        <span>知识库</span>',
+			'        <span class="knowledge-trigger-state">已连接</span>',
+			'      </button>',
+			'    </div>',
+			'',
+			'    <div class="knowledge-backdrop" id="knowledgeBaseBackdrop" hidden></div>',
+			'    <aside class="knowledge-drawer" id="knowledgeBaseDrawer" aria-hidden="true" aria-labelledby="knowledgeBaseTitle">',
+			'      <div class="knowledge-drawer-head">',
+			'        <div>',
+			'          <div class="section-kicker">V3 Knowledge</div>',
+			'          <h2 id="knowledgeBaseTitle">品牌知识库</h2>',
+			'          <div class="muted">合规规则优先 · 页面只读摘要</div>',
+			'        </div>',
+			'        <button class="knowledge-close" type="button" id="knowledgeBaseClose" aria-label="关闭知识库">×</button>',
+			'      </div>',
+			'      <div class="knowledge-tabs" id="knowledgeBaseTabs" role="tablist" aria-label="知识库分类"></div>',
+			'      <div class="knowledge-content" id="knowledgeBaseContent" aria-live="polite">正在载入知识库摘要…</div>',
+			'    </aside>'
 		].join('\n');
+
+		return shell.replace(
+			/      <\/div>\r?\n    <\/div>\r?\n\r?\n\r?\n    <section class="step-tracker">/,
+			`${knowledgeUi}\n\n    <section class="step-tracker">`
+		);
+	}
+
+	private createScriptedWorkflowBuildSection(buildSection: string, workflowVersion: ScriptedWorkflowVersion): string {
+		if (workflowVersion !== 'v3') {
+			return buildSection;
+		}
+
+		return buildSection.replace(
+			/(        <button class="primary-button" type="button" id="confirmIp">生成 4 个文字方案<\/button>\r?\n      <\/div>)/,
+			[
+				'$1',
+				'      <div class="generation-status" id="posterGenerationStatus" data-active="false" aria-live="polite">',
+				'        <span class="generation-pulse" aria-hidden="true"></span>',
+				'        <div class="generation-status-copy">',
+				'          <strong>正在生成提示词</strong>',
+				'          <span class="generation-status-text">正在分析已锁定的 IP 与产品信息</span>',
+				'          <span class="generation-progress" aria-hidden="true"><span></span></span>',
+				'        </div>',
+				'      </div>'
+			].join('\n')
+		);
+	}
+
+	private createScriptedWorkflowLayoutSection(layoutSection: string, workflowVersion: ScriptedWorkflowVersion): string {
+		if (workflowVersion !== 'v3') {
+			return layoutSection;
+		}
+
+		return layoutSection.replace(
+			/(        <button class="primary-button" type="button" id="confirmPoster">根据已选方案生成 5 张终稿<\/button>\r?\n      <\/div>)/,
+			[
+				'$1',
+				'      <div class="generation-status" id="finalGenerationStatus" data-active="false" aria-live="polite">',
+				'        <span class="generation-pulse" aria-hidden="true"></span>',
+				'        <div class="generation-status-copy">',
+				'          <strong>正在生成终稿</strong>',
+				'          <span class="generation-status-text">正在锁定海报构图与主体关系</span>',
+				'          <span class="generation-progress" aria-hidden="true"><span></span></span>',
+				'        </div>',
+				'      </div>'
+			].join('\n')
+		);
 	}
 
 	private createScriptedWorkflowInputSection(inputSection: string, workflowVersion: ScriptedWorkflowVersion): string {
@@ -2196,22 +2367,115 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 				'.preview-grid {',
 				'  margin-top: 18px;',
 				'}',
-				'',
 				'/* scripted-ip-upload-variant:end */',
 				''
 			].join('\n');
 
-		return css + '\n' + sharedCss + '\n' + variantCss;
+		const knowledgeCss = workflowVersion === 'v3' ? [
+			'.knowledge-trigger {',
+			'  display: inline-flex;',
+			'  align-items: center;',
+			'  gap: 8px;',
+			'  min-height: 42px;',
+			'  padding: 9px 12px;',
+			'  border: 1px solid rgba(255, 183, 112, 0.28);',
+			'  border-radius: 999px;',
+			'  color: #fff5e9;',
+			'  background: rgba(167, 86, 31, 0.18);',
+			'  cursor: pointer;',
+			'}',
+			'',
+			'.knowledge-trigger-dot {',
+			'  width: 9px;',
+			'  height: 9px;',
+			'  border-radius: 50%;',
+			'  background: #8ee1ae;',
+			'  box-shadow: 0 0 0 5px rgba(142, 225, 174, 0.12);',
+			'}',
+			'',
+			'.knowledge-trigger-state {',
+			'  color: #bfeecf;',
+			'  font-size: 11px;',
+			'}',
+			'',
+			'.knowledge-backdrop {',
+			'  position: fixed;',
+			'  inset: 0;',
+			'  z-index: 80;',
+			'  background: rgba(5, 9, 12, 0.66);',
+			'  backdrop-filter: blur(5px);',
+			'}',
+			'',
+			'.knowledge-drawer {',
+			'  position: fixed;',
+			'  top: 0;',
+			'  right: 0;',
+			'  bottom: 0;',
+			'  z-index: 90;',
+			'  width: min(520px, 94vw);',
+			'  padding: 28px;',
+			'  overflow-y: auto;',
+			'  color: var(--text);',
+			'  background: linear-gradient(160deg, #18211f, #101718 72%);',
+			'  border-left: 1px solid rgba(255, 255, 255, 0.1);',
+			'  box-shadow: -28px 0 80px rgba(0, 0, 0, 0.42);',
+			'  transform: translateX(105%);',
+			'  transition: transform .28s ease;',
+			'}',
+			'',
+			'.knowledge-drawer[data-open="true"] { transform: translateX(0); }',
+			'.knowledge-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }',
+			'.knowledge-drawer-head h2 { margin: 5px 0 4px; }',
+			'.knowledge-close { width: 40px; height: 40px; border: 1px solid rgba(255,255,255,.12); border-radius: 50%; color: var(--text); background: rgba(255,255,255,.05); font-size: 24px; cursor: pointer; }',
+			'.knowledge-tabs { display: flex; gap: 8px; margin: 24px 0 18px; overflow-x: auto; }',
+			'.knowledge-tab { flex: 0 0 auto; padding: 9px 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 999px; color: var(--muted); background: rgba(255,255,255,.04); cursor: pointer; }',
+			'.knowledge-tab[aria-selected="true"] { color: #fff4e6; border-color: rgba(255,183,112,.32); background: rgba(167,86,31,.2); }',
+			'.knowledge-category-summary { margin: 0 0 16px; color: #d9e0dc; line-height: 1.65; }',
+			'.knowledge-card { padding: 16px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 18px; background: rgba(255,255,255,.035); }',
+			'.knowledge-card strong { display: block; margin-bottom: 7px; color: #fff1df; }',
+			'.knowledge-card p { margin: 0; color: var(--muted); line-height: 1.65; }',
+			'',
+			'.generation-status {',
+			'  display: none;',
+			'  align-items: flex-start;',
+			'  gap: 14px;',
+			'  margin-top: 16px;',
+			'  padding: 15px 16px;',
+			'  border: 1px solid rgba(255, 183, 112, 0.2);',
+			'  border-radius: 18px;',
+			'  background: linear-gradient(120deg, rgba(166, 87, 36, .14), rgba(53, 99, 81, .12));',
+			'}',
+			'.generation-status[data-active="true"] { display: flex; }',
+			'.generation-pulse { width: 12px; height: 12px; margin-top: 4px; border-radius: 50%; background: #f2a760; box-shadow: 0 0 0 0 rgba(242,167,96,.42); animation: knowledgePulse 1.4s ease-out infinite; }',
+			'.generation-status-copy { display: grid; flex: 1; gap: 5px; min-width: 0; }',
+			'.generation-status-text { min-height: 20px; color: var(--muted); font-size: 13px; }',
+			'.generation-progress { height: 4px; margin-top: 4px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.08); }',
+			'.generation-progress > span { display: block; width: 100%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #e48643, #e7bd78, #73b598); transform-origin: left; animation: knowledgeProgress 10s linear forwards; }',
+			'@keyframes knowledgePulse { 70% { box-shadow: 0 0 0 10px rgba(242,167,96,0); } 100% { box-shadow: 0 0 0 0 rgba(242,167,96,0); } }',
+			'@keyframes knowledgeProgress { from { transform: scaleX(0); } to { transform: scaleX(1); } }',
+			'',
+			'@media (max-width: 760px) {',
+			'  .topbar { align-items: flex-start; }',
+			'  .knowledge-trigger { width: 100%; justify-content: center; }',
+			'  .knowledge-drawer { width: 100%; padding: 22px 18px; }',
+			'}',
+			'@media (prefers-reduced-motion: reduce) {',
+			'  .knowledge-drawer, .generation-progress > span, .generation-pulse { transition: none; animation: none; }',
+			'  .generation-progress > span { transform: scaleX(1); }',
+			'}',
+			''
+		].join('\n') : '';
+
+		return css + '\n' + sharedCss + '\n' + variantCss + '\n' + knowledgeCss;
 	}
 
 	private createScriptedWorkflowJs(js: string, workflowVersion: ScriptedWorkflowVersion): string {
-		const versionJs = workflowVersion === 'v1'
+		const uploadJs = workflowVersion === 'v1'
 			? this.createScriptedWorkflowV1UploadScript()
-			: workflowVersion === 'v2'
-			? this.createScriptedWorkflowV2UploadScript()
-			: this.createScriptedWorkflowV3UploadScript();
+			: this.createScriptedWorkflowV2UploadScript();
+		const knowledgeJs = workflowVersion === 'v3' ? this.createScriptedWorkflowV3KnowledgeScript() : '';
 
-		return js + '\n' + versionJs;
+		return js + '\n' + uploadJs + '\n' + knowledgeJs;
 	}
 
 	private createScriptedWorkflowV1UploadScript(): string {
@@ -2341,14 +2605,6 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 	}
 
 	private createScriptedWorkflowV2UploadScript(): string {
-		return this.createScriptedWorkflowV2UploadScriptBase(false);
-	}
-
-	private createScriptedWorkflowV3UploadScript(): string {
-		return this.createScriptedWorkflowV2UploadScriptBase(true);
-	}
-
-	private createScriptedWorkflowV2UploadScriptBase(includeStyleDialog: boolean): string {
 		return [
 			'',
 			'/* scripted-ip-upload-workflow:start */',
@@ -2362,21 +2618,8 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			'  const imagePreprocessFailureMessage = "Image preprocessing failed: the uploaded file could not be reduced to the supported size profile. Please try another image with a simpler background or lower native resolution.";',
 			'  const originalReadPreview = readPreview;',
 			'  const originalHandleGenerateIp = handleGenerateIp;',
-			...(includeStyleDialog ? [
-			'  const defaultIpStylePreferences = { color: "天青碧影", style: "3D 手办质感", background: "纯白背景" };',
-			'  const defaultIpStyleCustom = { color: "", style: "", background: "" };',
-			'  const ipStyleOptionGroups = [',
-			'    { key: "color", label: "颜色", customLabel: "自定义颜色", placeholder: "例如：湖蓝渐变、鎏金红、黑白水墨", options: ["天青碧影", "桃夭灼华", "紫极华裳", "丹枫秋韵", "水墨黑白", "金玉暖黄", "青花瓷蓝", "赛博霓虹", "薄荷奶绿"] },',
-			'    { key: "style", label: "风格", customLabel: "自定义风格", placeholder: "例如：宋代工笔、低多边形、毛绒玩具", options: ["3D 手办质感", "国风 Q 版", "商业潮玩", "水墨插画", "二次元厚涂", "黏土玩具", "玻璃水晶", "木雕玉雕", "毛绒玩偶"] },',
-			'    { key: "background", label: "背景", customLabel: "自定义背景", placeholder: "例如：竹林晨雾、节庆灯会、透明 PNG", options: ["纯白背景", "透明感留白", "含简约场景", "中式园林", "产品展台", "节日氛围", "电商棚拍", "透明背景", "暗色聚光"] }',
-			'  ];',
-			] : []),
 			'',
 			'  state.uploadDiagnostics = state.uploadDiagnostics || { ip: null, product: null };',
-			...(includeStyleDialog ? [
-			'  state.ipStylePreferences = state.ipStylePreferences || { ...defaultIpStylePreferences };',
-			'  state.ipStyleCustom = state.ipStyleCustom || { ...defaultIpStyleCustom };',
-			] : []),
 			'',
 			'  function setUploadStatus(message, type) {',
 			'    if (!uploadStatusEl) {',
@@ -2503,136 +2746,6 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			'    setUploadStatus(processed.wasCompressed ? "Reference image prepared for generation. Size and resolution were optimized automatically." : "Reference image is ready for generation.", processed.wasCompressed ? "success" : "info");',
 			'  }',
 			'',
-			...(includeStyleDialog ? [
-			'  function ensureIpStyleDialogCss() {',
-			'    if (document.getElementById("ipStyleDialogRuntimeCss")) {',
-			'      return;',
-			'    }',
-			'    const style = document.createElement("style");',
-			'    style.id = "ipStyleDialogRuntimeCss";',
-			'    style.textContent = [',
-			'      ".ip-style-dialog-backdrop{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(34,22,16,.42);backdrop-filter:blur(12px)}",',
-			'      ".ip-style-dialog-backdrop.is-open{display:flex}",',
-			'      ".ip-style-dialog{width:min(860px,100%);max-height:min(760px,calc(100vh - 48px));overflow:auto;padding:24px;border-radius:24px;border:1px solid rgba(255,255,255,.68);background:linear-gradient(180deg,rgba(255,250,244,.98),rgba(248,239,229,.96));box-shadow:0 28px 80px rgba(48,31,22,.24);color:var(--text,#2f241d);font:14px/1.6 \\"Microsoft YaHei\\",\\"PingFang SC\\",sans-serif}",',
-			'      ".ip-style-dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}",',
-			'      ".ip-style-dialog-title{margin:0 0 4px;font-size:22px;line-height:1.2}",',
-			'      ".ip-style-close{width:36px;height:36px;border:0;border-radius:999px;background:rgba(48,31,22,.08);color:var(--text,#2f241d);font-size:22px;cursor:pointer;flex:0 0 auto}",',
-			'      ".ip-style-groups{display:grid;gap:16px}",',
-			'      ".ip-style-group-title{display:block;margin-bottom:8px;font-weight:800;font-size:15px}",',
-			'      ".ip-style-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}",',
-			'      ".ip-style-option{min-height:48px;padding:10px 12px;border:1px solid rgba(191,91,49,.16);border-radius:16px;background:rgba(255,255,255,.72);color:var(--text,#2f241d);font:inherit;font-weight:700;cursor:pointer;text-align:center;transition:border-color .18s ease,background .18s ease,color .18s ease,transform .18s ease}",',
-			'      ".ip-style-option:hover{transform:translateY(-1px)}",',
-			'      ".ip-style-option.is-selected{border-color:rgba(191,91,49,.48);background:linear-gradient(135deg,var(--accent,#bf5b31),var(--accent-deep,#8f341c));color:#fff8f5}",',
-			'      ".ip-style-custom{margin-top:10px;padding:12px;border-radius:16px;border:1px dashed rgba(191,91,49,.22);background:rgba(255,255,255,.48);display:block}",',
-			'      ".ip-style-custom.is-custom-active{border-style:solid;border-color:rgba(191,91,49,.42);background:rgba(255,247,239,.82)}",',
-			'      ".ip-style-custom-label{display:block;margin-bottom:6px;font-size:12px;font-weight:800;color:var(--accent-deep,#8f341c)}",',
-			'      ".ip-style-custom-input{width:100%;min-height:44px;padding:10px 12px;border:1px solid rgba(191,91,49,.18);border-radius:14px;background:rgba(255,255,255,.9);color:var(--text,#2f241d);font:inherit;outline:none;box-sizing:border-box}",',
-			'      ".ip-style-custom-input:focus{border-color:rgba(191,91,49,.55);box-shadow:0 0 0 3px rgba(191,91,49,.12)}",',
-			'      ".ip-style-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;flex-wrap:wrap}",',
-			'      "@media (max-width:720px){.ip-style-options{grid-template-columns:1fr}.ip-style-dialog{padding:18px}}",',
-			'    ].join("\\n");',
-			'    document.head.append(style);',
-			'  }',
-			'',
-			'  function createIpStyleDialog() {',
-			'    ensureIpStyleDialogCss();',
-			'    const backdrop = document.createElement("div");',
-			'    backdrop.className = "ip-style-dialog-backdrop";',
-			'    backdrop.setAttribute("role", "presentation");',
-			'    backdrop.innerHTML = `',
-			'      <div class="ip-style-dialog" role="dialog" aria-modal="true" aria-labelledby="ipStyleDialogTitle">',
-			'        <div class="ip-style-dialog-head">',
-			'          <div>',
-			'            <h4 class="ip-style-dialog-title" id="ipStyleDialogTitle">选择 IP 生成风格</h4>',
-			'            <div class="muted">这些选项用于演示生成前参数选择，当前不会改写实际提示词。</div>',
-			'          </div>',
-			'          <button class="ip-style-close" type="button" data-action="close" aria-label="关闭">×</button>',
-			'        </div>',
-			'        <div class="ip-style-groups"></div>',
-			'        <div class="ip-style-actions">',
-			'          <button class="secondary-button" type="button" data-action="cancel">取消</button>',
-			'          <button class="primary-button" type="button" data-action="confirm">确认生成</button>',
-			'        </div>',
-			'      </div>`;',
-			'    const groupsEl = backdrop.querySelector(".ip-style-groups");',
-			'    ipStyleOptionGroups.forEach(group => {',
-			'      const groupEl = document.createElement("div");',
-			'      groupEl.className = "ip-style-group";',
-			'      const labelEl = document.createElement("strong");',
-			'      labelEl.className = "ip-style-group-title";',
-			'      labelEl.textContent = group.label;',
-			'      const optionsEl = document.createElement("div");',
-			'      optionsEl.className = "ip-style-options";',
-			'      group.options.forEach(option => {',
-			'        const button = document.createElement("button");',
-			'        button.className = "ip-style-option";',
-			'        button.type = "button";',
-			'        button.dataset.key = group.key;',
-			'        button.dataset.value = option;',
-			'        button.textContent = option;',
-			'        button.addEventListener("click", () => {',
-			'          state.ipStylePreferences[group.key] = option;',
-			'          syncIpStyleDialogSelection(backdrop);',
-			'        });',
-			'        optionsEl.append(button);',
-			'      });',
-			'      const customEl = document.createElement("label");',
-			'      customEl.className = "ip-style-custom";',
-			'      const customLabelEl = document.createElement("span");',
-			'      customLabelEl.className = "ip-style-custom-label";',
-			'      customLabelEl.textContent = group.customLabel;',
-			'      const input = document.createElement("input");',
-			'      input.className = "ip-style-custom-input";',
-			'      input.type = "text";',
-			'      input.dataset.key = group.key;',
-			'      input.placeholder = group.placeholder;',
-			'      input.value = state.ipStyleCustom[group.key] || "";',
-			'      input.addEventListener("input", () => {',
-			'        const customValue = input.value.trim();',
-			'        state.ipStyleCustom[group.key] = customValue;',
-			'        state.ipStylePreferences[group.key] = customValue || defaultIpStylePreferences[group.key];',
-			'        syncIpStyleDialogSelection(backdrop);',
-			'      });',
-			'      customEl.append(customLabelEl, input);',
-			'      groupEl.append(labelEl, optionsEl, customEl);',
-			'      groupsEl.append(groupEl);',
-			'    });',
-			'    backdrop.addEventListener("click", event => {',
-			'      const target = event.target;',
-			'      if (target === backdrop || target?.dataset?.action === "close" || target?.dataset?.action === "cancel") {',
-			'        closeIpStyleDialog(backdrop);',
-			'      }',
-			'      if (target?.dataset?.action === "confirm") {',
-			'        closeIpStyleDialog(backdrop);',
-			'        void runGenerateIp();',
-			'      }',
-			'    });',
-			'    document.body.append(backdrop);',
-			'    return backdrop;',
-			'  }',
-			'',
-			'  function syncIpStyleDialogSelection(backdrop) {',
-			'    backdrop.querySelectorAll(".ip-style-option").forEach(button => {',
-			'      button.classList.toggle("is-selected", state.ipStylePreferences[button.dataset.key] === button.dataset.value);',
-			'    });',
-			'    backdrop.querySelectorAll(".ip-style-custom-input").forEach(input => {',
-			'      const key = input.dataset.key;',
-			'      input.value = state.ipStyleCustom[key] || "";',
-			'      input.closest(".ip-style-custom")?.classList.toggle("is-custom-active", Boolean(state.ipStyleCustom[key]));',
-			'    });',
-			'  }',
-			'',
-			'  function openIpStyleDialog() {',
-			'    const backdrop = document.querySelector(".ip-style-dialog-backdrop") || createIpStyleDialog();',
-			'    syncIpStyleDialogSelection(backdrop);',
-			'    backdrop.classList.add("is-open");',
-			'  }',
-			'',
-			'  function closeIpStyleDialog(backdrop) {',
-			'    backdrop.classList.remove("is-open");',
-			'  }',
-			'',
-			] : []),
 			'  async function runGenerateIp() {',
 			'    const originalText = confirmUploadBtn.textContent;',
 			'    confirmUploadBtn.disabled = true;',
@@ -2667,7 +2780,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			'  confirmUploadBtn.addEventListener("click", event => {',
 			'    event.preventDefault();',
 			'    event.stopImmediatePropagation();',
-			includeStyleDialog ? '    openIpStyleDialog();' : '    void runGenerateIp();',
+			'    void runGenerateIp();',
 			'  }, true);',
 			'',
 			'  resetAllBtn.addEventListener("click", () => {',
@@ -2676,6 +2789,232 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			'  }, true);',
 			'})();',
 			'/* scripted-ip-upload-workflow:end */',
+			''
+		].join('\n');
+	}
+
+	private createScriptedWorkflowV3KnowledgeScript(): string {
+		return [
+			'',
+			'/* scripted-ip-knowledge-workflow:start */',
+			'(function () {',
+			'  const knowledgeBasePath = "./data/knowledge-base.json";',
+			'  const knowledgeButton = document.getElementById("knowledgeBaseButton");',
+			'  const knowledgeBackdrop = document.getElementById("knowledgeBaseBackdrop");',
+			'  const knowledgeDrawer = document.getElementById("knowledgeBaseDrawer");',
+			'  const knowledgeClose = document.getElementById("knowledgeBaseClose");',
+			'  const knowledgeTabs = document.getElementById("knowledgeBaseTabs");',
+			'  const knowledgeContent = document.getElementById("knowledgeBaseContent");',
+			'  const posterStatus = document.getElementById("posterGenerationStatus");',
+			'  const finalStatus = document.getElementById("finalGenerationStatus");',
+			'  const resetWorkflowButton = document.getElementById("resetAll");',
+			'  const originalHandleGeneratePosterText = handleGeneratePosterText;',
+			'  const originalHandleGenerateFinal = handleGenerateFinal;',
+			'  const statusIntervals = new Map();',
+			'  let knowledgeBasePromise;',
+			'  let knowledgeBase;',
+			'  let activeCategoryId = "brand";',
+			'  let previousFocus;',
+			'',
+			'  const generationMessages = {',
+			'    poster: [',
+			'      "正在分析已锁定的 IP 与产品信息",',
+			'      "正在提炼品牌定位与核心卖点",',
+			'      "正在读取知识库并调整生成效果",',
+			'      "正在校验功效边界与违禁表达",',
+			'      "正在组装 4 组可执行提示词"',
+			'    ],',
+			'    final: [',
+			'      "正在锁定海报构图与主体关系",',
+			'      "正在读取知识库并调整生成效果",',
+			'      "正在适配品牌色与柔光氛围",',
+			'      "正在检查违禁元素与合规边界",',
+			'      "正在渲染 5 张终稿方案"',
+			'    ]',
+			'  };',
+			'',
+			'  async function ensureKnowledgeBaseLoaded() {',
+			'    if (knowledgeBase) return knowledgeBase;',
+			'    if (!knowledgeBasePromise) {',
+			'      knowledgeBasePromise = fetch(knowledgeBasePath, { cache: "no-store" })',
+			'        .then(response => {',
+			'          if (!response.ok) throw new Error("知识库摘要加载失败");',
+			'          return response.json();',
+			'        })',
+			'        .then(data => {',
+			'          knowledgeBase = data;',
+			'          return data;',
+			'        })',
+			'        .catch(error => {',
+			'          knowledgeBasePromise = null;',
+			'          throw error;',
+			'        });',
+			'    }',
+			'    return knowledgeBasePromise;',
+			'  }',
+			'',
+			'  function createKnowledgeCard(item) {',
+			'    const card = document.createElement("article");',
+			'    card.className = "knowledge-card";',
+			'    const title = document.createElement("strong");',
+			'    title.textContent = item.title || "知识条目";',
+			'    const content = document.createElement("p");',
+			'    content.textContent = item.content || "";',
+			'    card.append(title, content);',
+			'    return card;',
+			'  }',
+			'',
+			'  function renderKnowledgeCategory(categoryId) {',
+			'    if (!knowledgeBase || !knowledgeContent) return;',
+			'    activeCategoryId = categoryId;',
+			'    const category = (knowledgeBase.categories || []).find(item => item.id === categoryId);',
+			'    knowledgeTabs && knowledgeTabs.querySelectorAll(".knowledge-tab").forEach(tab => {',
+			'      tab.setAttribute("aria-selected", String(tab.dataset.category === categoryId));',
+			'    });',
+			'    knowledgeContent.replaceChildren();',
+			'    if (!category) {',
+			'      knowledgeContent.textContent = "当前分类暂无摘要。";',
+			'      return;',
+			'    }',
+			'    const summary = document.createElement("p");',
+			'    summary.className = "knowledge-category-summary";',
+			'    summary.textContent = category.summary || "";',
+			'    knowledgeContent.append(summary);',
+			'    (category.items || []).forEach(item => knowledgeContent.append(createKnowledgeCard(item)));',
+			'  }',
+			'',
+			'  function renderKnowledgeTabs() {',
+			'    if (!knowledgeBase || !knowledgeTabs) return;',
+			'    knowledgeTabs.replaceChildren();',
+			'    (knowledgeBase.categories || []).forEach(category => {',
+			'      const tab = document.createElement("button");',
+			'      tab.type = "button";',
+			'      tab.className = "knowledge-tab";',
+			'      tab.dataset.category = category.id;',
+			'      tab.setAttribute("role", "tab");',
+			'      tab.setAttribute("aria-selected", String(category.id === activeCategoryId));',
+			'      tab.textContent = category.title;',
+			'      tab.addEventListener("click", () => renderKnowledgeCategory(category.id));',
+			'      knowledgeTabs.append(tab);',
+			'    });',
+			'    renderKnowledgeCategory(activeCategoryId);',
+			'  }',
+			'',
+			'  async function openKnowledgeBase() {',
+			'    previousFocus = document.activeElement;',
+			'    knowledgeBackdrop.hidden = false;',
+			'    knowledgeDrawer.dataset.open = "true";',
+			'    knowledgeDrawer.setAttribute("aria-hidden", "false");',
+			'    knowledgeButton.setAttribute("aria-expanded", "true");',
+			'    try {',
+			'      await ensureKnowledgeBaseLoaded();',
+			'      renderKnowledgeTabs();',
+			'    } catch (error) {',
+			'      knowledgeContent.textContent = error.message || "知识库摘要加载失败。";',
+			'    }',
+			'    knowledgeClose.focus();',
+			'  }',
+			'',
+			'  function closeKnowledgeBase() {',
+			'    knowledgeDrawer.dataset.open = "false";',
+			'    knowledgeDrawer.setAttribute("aria-hidden", "true");',
+			'    knowledgeButton.setAttribute("aria-expanded", "false");',
+			'    knowledgeBackdrop.hidden = true;',
+			'    if (previousFocus && typeof previousFocus.focus === "function") previousFocus.focus();',
+			'  }',
+			'',
+			'  function stopGenerationStatus(statusElement) {',
+			'    if (!statusElement) return;',
+			'    const existing = statusIntervals.get(statusElement.id);',
+			'    if (existing) clearInterval(existing);',
+			'    statusIntervals.delete(statusElement.id);',
+			'    statusElement.dataset.active = "false";',
+			'  }',
+			'',
+			'  function startGenerationStatus(statusElement, messages) {',
+			'    stopGenerationStatus(statusElement);',
+			'    if (!statusElement) return;',
+			'    const textElement = statusElement.querySelector(".generation-status-text");',
+			'    const progressElement = statusElement.querySelector(".generation-progress > span");',
+			'    let messageIndex = 0;',
+			'    statusElement.dataset.active = "true";',
+			'    if (textElement) textElement.textContent = messages[0];',
+			'    if (progressElement) {',
+			'      progressElement.style.animation = "none";',
+			'      void progressElement.offsetWidth;',
+			'      progressElement.style.animation = "";',
+			'    }',
+			'    const interval = setInterval(() => {',
+			'      messageIndex = Math.min(messageIndex + 1, messages.length - 1);',
+			'      if (textElement) textElement.textContent = messages[messageIndex];',
+			'      if (messageIndex === messages.length - 1) {',
+			'        clearInterval(interval);',
+			'        statusIntervals.delete(statusElement.id);',
+			'      }',
+			'    }, 2000);',
+			'    statusIntervals.set(statusElement.id, interval);',
+			'  }',
+			'',
+			'  function stopAllGenerationStatus() {',
+			'    stopGenerationStatus(posterStatus);',
+			'    stopGenerationStatus(finalStatus);',
+			'  }',
+			'',
+			'  async function runKnowledgeGeneration(button, pendingText, statusElement, messages, task) {',
+			'    const originalText = button.textContent;',
+			'    button.disabled = true;',
+			'    button.textContent = pendingText;',
+			'    startGenerationStatus(statusElement, messages);',
+			'    try {',
+			'      await ensureKnowledgeBaseLoaded();',
+			'      await task();',
+			'    } catch (error) {',
+			'      alert(error.message || "生成失败。");',
+			'    } finally {',
+			'      stopGenerationStatus(statusElement);',
+			'      button.disabled = false;',
+			'      button.textContent = originalText;',
+			'    }',
+			'  }',
+			'',
+			'  knowledgeButton.addEventListener("click", () => { void openKnowledgeBase(); });',
+			'  knowledgeClose.addEventListener("click", closeKnowledgeBase);',
+			'  knowledgeBackdrop.addEventListener("click", closeKnowledgeBase);',
+			'  document.addEventListener("keydown", event => {',
+			'    if (event.key === "Escape" && knowledgeDrawer.dataset.open === "true") closeKnowledgeBase();',
+			'  });',
+			'',
+			'  state.disableBackgroundGeneration = true;',
+			'',
+			'  confirmIpBtn.addEventListener("click", event => {',
+			'    event.preventDefault();',
+			'    event.stopImmediatePropagation();',
+			'    void runKnowledgeGeneration(confirmIpBtn, "正在生成...", posterStatus, generationMessages.poster, originalHandleGeneratePosterText);',
+			'  }, true);',
+			'',
+			'  confirmPosterBtn.addEventListener("click", event => {',
+			'    event.preventDefault();',
+			'    event.stopImmediatePropagation();',
+			'    void runKnowledgeGeneration(confirmPosterBtn, "正在生成...", finalStatus, generationMessages.final, originalHandleGenerateFinal);',
+			'  }, true);',
+			'',
+			'  document.querySelectorAll(".poster-regen").forEach(button => {',
+			'    button.addEventListener("click", event => {',
+			'      event.preventDefault();',
+			'      event.stopImmediatePropagation();',
+			'      const slotIndex = Number(button.dataset.index || 0);',
+			'      void runKnowledgeGeneration(button, "正在生成...", posterStatus, generationMessages.poster, () => handleRegenerateSinglePosterText(slotIndex, button));',
+			'    }, true);',
+			'  });',
+			'',
+			'  resetWorkflowButton.addEventListener("click", () => {',
+			'    stopAllGenerationStatus();',
+			'    closeKnowledgeBase();',
+			'  }, true);',
+			'',
+			'  void ensureKnowledgeBaseLoaded().catch(error => console.error("[knowledge-base]", error));',
+			'})();',
+			'/* scripted-ip-knowledge-workflow:end */',
 			''
 		].join('\n');
 	}
@@ -2719,10 +3058,6 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		);
 		await this.fileService.writeFile(workflow.planFile, VSBuffer.fromString(projectFiles.planJson));
 		await this.fileService.writeFile(workflow.readmeFile, VSBuffer.fromString(projectFiles.readme));
-		await this.fileService.writeFile(workflow.fixtureManifestFile, VSBuffer.fromString(projectFiles.fixtureManifestJson));
-		for (const fixtureAsset of projectFiles.fixtureAssets) {
-			await this.fileService.writeFile(URI.joinPath(workflow.currentFixturesDirectory, fixtureAsset.filename), VSBuffer.fromString(fixtureAsset.content));
-		}
 		await this.fileService.writeFile(workflow.assetNotesFile, VSBuffer.fromString(projectFiles.assetNotes));
 	}
 
@@ -2809,18 +3144,6 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			'await originalReadPreview(input, img, wrapper, key);',
 			'const processed = await preprocessImage(file);'
 		];
-		const featureDialogSnippets = [
-			'const defaultIpStylePreferences = { color: "天青碧影", style: "3D 手办质感", background: "纯白背景" };',
-			'const defaultIpStyleCustom = { color: "", style: "", background: "" };',
-			'function ensureIpStyleDialogCss()',
-			'style.id = "ipStyleDialogRuntimeCss";',
-			'function createIpStyleDialog()',
-			'state.ipStylePreferences[group.key] = option;',
-			'state.ipStyleCustom[group.key] = customValue;',
-			'input.closest(".ip-style-custom")?.classList.toggle("is-custom-active", Boolean(state.ipStyleCustom[key]));',
-			'openIpStyleDialog();'
-		];
-		const hasFeatureDialog = content.includes('function createIpStyleDialog()') || content.includes('state.ipStylePreferences');
 		const forbiddenSnippets = [
 			'const axxEdEd = 1536;',
 			'const e agePreprocessFa',
@@ -2830,7 +3153,6 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		];
 
 		return requiredSnippets.every(snippet => content.includes(snippet))
-			&& (!hasFeatureDialog || featureDialogSnippets.every(snippet => content.includes(snippet)))
 			&& forbiddenSnippets.every(snippet => !content.includes(snippet));
 	}
 
@@ -2908,11 +3230,10 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			[workflow.scriptFile, projectFiles.js],
 			[workflow.planFile, projectFiles.planJson],
 			[workflow.readmeFile, projectFiles.readme],
-			[workflow.fixtureManifestFile, projectFiles.fixtureManifestJson],
 			[workflow.assetNotesFile, projectFiles.assetNotes]
 		];
-		for (const fixtureAsset of projectFiles.fixtureAssets) {
-			checks.push([URI.joinPath(workflow.currentFixturesDirectory, fixtureAsset.filename), fixtureAsset.content]);
+		if (projectFiles.knowledgeBaseJson !== undefined) {
+			checks.push([workflow.knowledgeBaseFile, projectFiles.knowledgeBaseJson]);
 		}
 
 		for (const [resource, expected] of checks) {
@@ -2931,27 +3252,26 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		await this.streamScriptedWorkflowFile(workflow.styleFile, '样式系统', projectFiles.css, 'css', '正在整理页面样式与视觉层级。', 8500, 20, progress);
 		await this.streamScriptedWorkflowFile(workflow.scriptFile, '交互逻辑', projectFiles.js, 'javascript', '正在整理页面交互与状态逻辑。', 9000, 22, progress);
 		await this.streamScriptedWorkflowFile(workflow.planFile, '页面配置', projectFiles.planJson, 'json', '正在写入页面配置与本轮方案摘要。', 3200, 8, progress);
-		await this.streamScriptedWorkflowFile(workflow.readmeFile, '项目说明', projectFiles.readme, 'markdown', '正在补充目录说明与使用提示。', 2600, 6, progress);
-		await this.streamScriptedWorkflowFile(workflow.fixtureManifestFile, '演示结果清单', projectFiles.fixtureManifestJson, 'json', '正在写入演示结果与展示清单。', 2200, 5, progress);
-		for (const fixtureAsset of projectFiles.fixtureAssets) {
-			await this.fileService.writeFile(URI.joinPath(workflow.currentFixturesDirectory, fixtureAsset.filename), VSBuffer.fromString(fixtureAsset.content));
+		if (projectFiles.knowledgeBaseJson !== undefined) {
+			await this.streamScriptedWorkflowFile(workflow.knowledgeBaseFile, '品牌知识库', projectFiles.knowledgeBaseJson, 'json', '正在写入品牌、合规与行业术语摘要。', 3200, 8, progress);
 		}
+		await this.streamScriptedWorkflowFile(workflow.readmeFile, '项目说明', projectFiles.readme, 'markdown', '正在补充目录说明与使用提示。', 2600, 6, progress);
 		await this.streamScriptedWorkflowFile(workflow.assetNotesFile, '素材说明', projectFiles.assetNotes, 'markdown', '正在补充素材目录说明。', 2200, 5, progress);
 	}
 
 	private async writeScriptedWorkflowHtmlFileInSections(targetFile: URI, sections: IScriptedWorkflowTemplateSections, progress: (part: IChatProgress) => void): Promise<void> {
 		const steps = [
-			{ base: '', section: sections.shell, key: 'customKeywordResponse.ip.writing.shell', message: "正在写入页面骨架与全局样式。", label: '页面骨架' },
-			{ base: sections.shell, section: sections.inputSection, key: 'customKeywordResponse.ip.writing.input', message: "正在补充上传区与阶段流程。", label: '上传区与阶段流程' },
-			{ base: sections.shell + sections.inputSection, section: sections.buildSection, key: 'customKeywordResponse.ip.writing.build', message: "正在补充 IP 构筑区。", label: 'IP 构筑区' },
-			{ base: sections.shell + sections.inputSection + sections.buildSection, section: sections.layoutSection, key: 'customKeywordResponse.ip.writing.layout', message: "正在补充海报方案区。", label: '海报方案区' },
-			{ base: sections.shell + sections.inputSection + sections.buildSection + sections.layoutSection, section: sections.outputSection + sections.footer, key: 'customKeywordResponse.ip.writing.output', message: "正在补充终稿输出区并完成页面收尾。", label: '终稿输出与收尾' }
+			{ base: '', section: sections.shell, message: localize('customKeywordResponse.ip.writing.shell', "正在写入页面骨架与全局样式。"), label: '页面骨架' },
+			{ base: sections.shell, section: sections.inputSection, message: localize('customKeywordResponse.ip.writing.input', "正在补充上传区与阶段流程。"), label: '上传区与阶段流程' },
+			{ base: sections.shell + sections.inputSection, section: sections.buildSection, message: localize('customKeywordResponse.ip.writing.build', "正在补充 IP 构筑区。"), label: 'IP 构筑区' },
+			{ base: sections.shell + sections.inputSection + sections.buildSection, section: sections.layoutSection, message: localize('customKeywordResponse.ip.writing.layout', "正在补充海报方案区。"), label: '海报方案区' },
+			{ base: sections.shell + sections.inputSection + sections.buildSection + sections.layoutSection, section: sections.outputSection + sections.footer, message: localize('customKeywordResponse.ip.writing.output', "正在补充终稿输出区并完成页面收尾。"), label: '终稿输出与收尾' }
 		] as const;
 
 		for (const step of steps) {
 			progress({
 				kind: 'progressMessage',
-				content: new MarkdownString(localize(step.key, step.message)),
+				content: new MarkdownString(step.message),
 				shimmer: true
 			});
 
@@ -3091,7 +3411,14 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		};
 	}
 
-	private createScriptedWorkflowTreeData(workflow: IScriptedWorkflow, launcherFile?: URI): IChatResponseProgressFileTreeData {
+	private createScriptedWorkflowTreeData(workflow: IScriptedWorkflow, launcherFile?: URI, includeKnowledgeBase = false): IChatResponseProgressFileTreeData {
+		const dataChildren: IChatResponseProgressFileTreeData[] = [
+			{ label: SCRIPTED_IP_WORKFLOW_PLAN_FILE, uri: workflow.planFile }
+		];
+		if (includeKnowledgeBase) {
+			dataChildren.push({ label: SCRIPTED_IP_WORKFLOW_KNOWLEDGE_BASE_FILE, uri: workflow.knowledgeBaseFile });
+		}
+
 		const children: IChatResponseProgressFileTreeData[] = [
 			{ label: SCRIPTED_IP_WORKFLOW_FILE, uri: workflow.targetFile },
 			{ label: SCRIPTED_IP_WORKFLOW_STYLE_FILE, uri: workflow.styleFile },
@@ -3100,9 +3427,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			{
 				label: SCRIPTED_IP_WORKFLOW_DATA_DIR,
 				uri: workflow.dataDirectory,
-				children: [
-					{ label: SCRIPTED_IP_WORKFLOW_PLAN_FILE, uri: workflow.planFile }
-				]
+				children: dataChildren
 			},
 			{
 				label: SCRIPTED_IP_WORKFLOW_FIXTURES_DIR,
@@ -3112,9 +3437,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 						label: SCRIPTED_IP_WORKFLOW_FIXTURES_CURRENT_DIR,
 						uri: workflow.currentFixturesDirectory,
 						children: [
-							{ label: SCRIPTED_IP_WORKFLOW_FIXTURE_MANIFEST_FILE, uri: workflow.fixtureManifestFile },
-							...SCRIPTED_IP_FIXTURE_IP_IMAGE_FILES.map(filename => ({ label: filename, uri: URI.joinPath(workflow.currentFixturesDirectory, filename) })),
-							...SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES.map(filename => ({ label: filename, uri: URI.joinPath(workflow.currentFixturesDirectory, filename) }))
+							{ label: SCRIPTED_IP_WORKFLOW_FIXTURE_MANIFEST_FILE, uri: workflow.fixtureManifestFile }
 						]
 					}
 				]

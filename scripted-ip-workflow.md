@@ -32,6 +32,7 @@ Generated page project:
 - Script file: `vibe-demo/app.js`
 - Generated README: `vibe-demo/README.md`
 - Plan snapshot: `vibe-demo/data/plan.json`
+- V3 knowledge snapshot: `vibe-demo/data/knowledge-base.json`
 - Asset notes: `vibe-demo/assets/asset-notes.md`
 
 Fixed external fixture directory:
@@ -39,6 +40,8 @@ Fixed external fixture directory:
 - Fixture root: `D:/vibe-demo/fixtures`
 - Current fixture directory: `D:/vibe-demo/fixtures/current`
 - Manifest file: `D:/vibe-demo/fixtures/current/manifest.json`
+
+This directory is a read-only input to the scripted workflow. The provider validates the existing manifest and every referenced image before it generates or revises the page. It never creates, clears, rewrites, or repairs files under this directory.
 
 The generated page reads fixture data through this browser path:
 
@@ -81,19 +84,19 @@ The generated page title in that template is:
    - `就这样`
    - `开始创建`
    - `按这个计划开始`
-7. The provider creates or updates `vibe-demo`.
-8. The provider reads `resources/chat-templates/line-art-ip-product.html`.
-9. The template is split into page sections and rewritten into:
+7. The provider reads and validates `D:/vibe-demo/fixtures/current/manifest.json` and its referenced images.
+8. The provider creates or updates `vibe-demo`.
+9. The provider reads `resources/chat-templates/line-art-ip-product.html`.
+10. The template is split into page sections and rewritten into:
    - `index.html`
    - `styles.css`
    - `app.js`
    - `README.md`
    - `data/plan.json`
-   - fixture manifest and fixture SVG files
    - `assets/asset-notes.md`
-10. The provider opens `vibe-demo/index.html`.
-11. The provider validates the generated state and reports completion.
-12. After V1 completes, the follow-up can create:
+11. The provider opens `vibe-demo/index.html`.
+12. The provider validates the generated state and reports completion.
+13. After V1 completes, the follow-up can create:
    - `vibe-demo/start-preview.bat`
    - `vibe-demo/preview_server.py`
 
@@ -118,7 +121,7 @@ Important template sections and IDs:
 - `exportBtn`
 - `resetAll`
 
-## V1 and V2 Behavior
+## V1, V2, and V3 Behavior
 
 The workflow starts as V1:
 
@@ -129,8 +132,7 @@ workflowVersion: 'v1'
 After V1 is done, it waits for two kinds of fix requests:
 
 1. UI/layout request:
-   - `修复ui`
-   - `修复UI`
+   - `修复`
 2. Image upload/compression request:
    - `优化图片上传策略：自动压缩到长边 1536 以内，并控制在 4MB 内`
    - `图片自动压缩到1536和4m以内`
@@ -143,6 +145,22 @@ sessionState.workflowVersion = 'v2';
 ```
 
 V2 revises the same `vibe-demo/index.html`, `styles.css`, and `app.js`. It does not create a separate V2 HTML file.
+
+After V2 completes, a chat message containing `知识库` switches the same session to V3. V1 cannot skip directly to V3.
+
+V3 keeps the V2 upload compression and layout fixes, then adds:
+
+- a top-bar `知识库` button with three read-only summary categories;
+- `vibe-demo/data/knowledge-base.json`, copied from the bundled brand/compliance snapshot;
+- knowledge-base progress presentation while poster prompts and final images continue to come directly from the fixed fixture manifest;
+- 10-second progress animations for poster prompt generation and final image generation;
+- the required progress message `正在读取知识库并调整生成效果`.
+
+The bundled source snapshot is:
+
+- `resources/chat-templates/orange-leaf-knowledge-base.json`
+
+V3 revises the same `vibe-demo/index.html`, `styles.css`, and `app.js`; it does not create a separate V3 HTML file. Repeating `知识库` while already on V3 reports that the knowledge base is already connected and does not run another revision.
 
 ## Where To Modify Common Things
 
@@ -170,6 +188,7 @@ const SCRIPTED_IP_WORKFLOW_SCRIPT_FILE = 'app.js';
 const SCRIPTED_IP_WORKFLOW_README_FILE = 'README.md';
 const SCRIPTED_IP_WORKFLOW_DATA_DIR = 'data';
 const SCRIPTED_IP_WORKFLOW_PLAN_FILE = 'plan.json';
+const SCRIPTED_IP_WORKFLOW_KNOWLEDGE_BASE_FILE = 'knowledge-base.json';
 const SCRIPTED_IP_WORKFLOW_ASSETS_DIR = 'assets';
 const SCRIPTED_IP_WORKFLOW_ASSET_NOTES_FILE = 'asset-notes.md';
 ```
@@ -223,6 +242,20 @@ const SCRIPTED_IP_IMAGE_FIX_WORDS = [...]
 
 The V2 switch happens in `handleScriptedWorkflowRequest` after both `uiOverflow` and `imageCompression` are recorded.
 
+### Change V3 Knowledge Trigger Or Content
+
+Edit:
+
+```ts
+const SCRIPTED_IP_KNOWLEDGE_BASE_WORDS = ['知识库'];
+```
+
+The V3 switch happens in `handleScriptedWorkflowRequest` only when the current session is finished on V2.
+
+Edit the bundled summary data in:
+
+- `resources/chat-templates/orange-leaf-knowledge-base.json`
+
 ### Change Generated HTML Layout
 
 Edit:
@@ -261,22 +294,19 @@ Patch markers used in generated output:
 /* scripted-ip-upload-workflow:end */
 ```
 
-### Change Fixture Manifest And Placeholder Assets
+### External Fixture Manifest And Images
 
-Edit:
+The workflow treats `D:/vibe-demo/fixtures/current/manifest.json` and every image it references as user-owned read-only inputs.
 
-```ts
-createScriptedWorkflowFixtureManifest()
-createScriptedWorkflowFixtureAssets()
-createScriptedWorkflowFixtureSvg(...)
-```
+Before page generation, `validateScriptedWorkflowFixtures(...)` checks that:
 
-Fixture image file names are controlled by:
+- the manifest exists and is valid JSON;
+- it contains `ip`, `poster`, and `final` arrays;
+- the `ip` and `final` entries reference local image files;
+- every referenced image exists under `D:/vibe-demo/fixtures/current/`;
+- image references are relative paths that cannot escape the `current` directory.
 
-```ts
-const SCRIPTED_IP_FIXTURE_IP_IMAGE_FILES = ['ip-01.svg', 'ip-02.svg', 'ip-03.svg', 'ip-04.svg'] as const;
-const SCRIPTED_IP_FIXTURE_FINAL_IMAGE_FILES = ['final-01.svg', 'final-02.svg', 'final-03.svg', 'final-04.svg', 'final-05.svg'] as const;
-```
+If validation fails, the workflow stops with a warning. It does not create a replacement manifest or placeholder SVG files.
 
 ### Change Generated `plan.json`
 
@@ -345,6 +375,6 @@ After the compile check passes, test the workflow manually:
 4. Choose the three plan options.
 5. Confirm with `按这个计划开始`.
 6. Check that `vibe-demo/index.html`, `styles.css`, `app.js`, and `data/plan.json` are generated.
-7. Check that fixtures appear in `D:/vibe-demo/fixtures/current/`.
-8. Create the preview launcher if needed and open `http://127.0.0.1:5500/index.html`.
-
+7. Check that the timestamp and content of `D:/vibe-demo/fixtures/current/manifest.json` and all referenced images are unchanged.
+8. Confirm that the page displays the images referenced by the existing manifest.
+9. Create the preview launcher if needed and open `http://127.0.0.1:5500/index.html`.

@@ -1,1048 +1,4 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BrandVision AI 绘图智能体</title>
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <style>
-    :root {
-      --panel: rgba(255, 250, 244, 0.82);
-      --line: #e5d6c7;
-      --text: #2f241d;
-      --muted: #79695d;
-      --accent: #bf5b31;
-      --accent-deep: #8f341c;
-      --teal: #2f6e67;
-      --shadow: 0 22px 55px rgba(101, 59, 35, 0.14);
-      --radius: 24px;
-      --radius-sm: 18px;
-    }
-
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-
-    body {
-      margin: 0;
-      font: 14px/1.7 "Microsoft YaHei", "PingFang SC", sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(circle at top left, rgba(191, 91, 49, 0.18), transparent 26%),
-        radial-gradient(circle at top right, rgba(47, 110, 103, 0.18), transparent 28%),
-        linear-gradient(180deg, #fff7ef 0%, #f4efe7 40%, #efe6db 100%);
-    }
-
-    .shell {
-      width: min(1440px, calc(100% - 40px));
-      margin: 0 auto;
-      padding: 24px 0 60px;
-    }
-
-    .glass,
-    .metric,
-    .step-card,
-    .selection-card,
-    .poster-tab,
-    .final-card,
-    .tool-chip,
-    .upload-card,
-    .export-box {
-      background: var(--panel);
-      border: 1px solid rgba(255, 255, 255, 0.55);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
-    }
-
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 18px;
-      padding: 18px 22px;
-      border-radius: 999px;
-      margin-bottom: 20px;
-    }
-
-    .brand { display: flex; align-items: center; gap: 14px; }
-
-    .logo {
-      width: 52px;
-      height: 52px;
-      border-radius: 18px;
-      display: grid;
-      place-items: center;
-      font-weight: 800;
-      color: #fff;
-      background: linear-gradient(145deg, var(--accent) 0%, var(--accent-deep) 52%, #36170d 100%);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.25);
-    }
-
-    .brand h1,
-    .hero h2,
-    .section-head h3,
-    .export-box h4 {
-      margin: 0;
-      letter-spacing: -0.03em;
-    }
-
-    .muted { color: var(--muted); }
-
-    .status-pills,
-    .tag-row,
-    .tools-row,
-    .cta-row,
-    .selection-meta {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .pill,
-    .tool-chip,
-    .poster-callout {
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-weight: 700;
-    }
-
-    .pill {
-      padding: 10px 14px;
-      border: 1px solid rgba(191, 91, 49, 0.18);
-      background: rgba(255,255,255,0.76);
-      color: var(--accent-deep);
-    }
-
-    .hero {
-      display: block;
-      margin-bottom: 18px;
-    }
-
-    .hero-main,
-    .section,
-    .footer-note {
-      border-radius: calc(var(--radius) + 6px);
-      padding: 26px;
-    }
-
-    .hero-main {
-      min-height: 360px;
-      position: relative;
-      overflow: hidden;
-      background:
-        linear-gradient(135deg, rgba(48, 31, 22, 0.92), rgba(112, 57, 31, 0.86)),
-        radial-gradient(circle at 25% 20%, rgba(255,255,255,0.18), transparent 28%);
-      color: #fff7f1;
-    }
-
-    .hero-main::after {
-      content: "";
-      position: absolute;
-      inset: auto -50px -90px auto;
-      width: 320px;
-      height: 320px;
-      border-radius: 46% 54% 44% 56%;
-      background: radial-gradient(circle at 30% 30%, rgba(255, 223, 171, 0.9), rgba(219, 159, 62, 0.26) 45%, transparent 72%);
-      filter: blur(6px);
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      padding: 8px 14px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.12);
-      border: 1px solid rgba(255,255,255,0.18);
-      font-weight: 700;
-      margin-bottom: 18px;
-    }
-
-    .hero h2 {
-      font-size: clamp(34px, 5vw, 56px);
-      line-height: 1.05;
-      max-width: 760px;
-      margin-bottom: 14px;
-    }
-
-    .hero-copy {
-      max-width: 720px;
-      color: rgba(255,247,241,0.82);
-      font-size: 15px;
-    }
-
-    .hero-metrics {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-top: 26px;
-    }
-
-    .metric {
-      padding: 14px;
-      border-radius: 20px;
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.12);
-      box-shadow: none;
-    }
-
-    .metric strong {
-      display: block;
-      font-size: 28px;
-      line-height: 1;
-      margin-bottom: 6px;
-      color: #ffd8be;
-    }
-
-    .analysis-panel,
-    .guide-panel,
-    .compare-box {
-      padding: 18px;
-      border-radius: var(--radius);
-      background: rgba(255,255,255,0.72);
-      border: 1px solid rgba(191, 91, 49, 0.12);
-    }
-
-    .mini-list,
-    .export-box ul,
-    .compare-list {
-      margin: 12px 0 0;
-      padding-left: 18px;
-    }
-
-    .step-tracker {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
-      margin-bottom: 18px;
-    }
-
-    .step-card {
-      padding: 16px;
-      border-radius: var(--radius-sm);
-    }
-
-    .step-card.active {
-      background: linear-gradient(135deg, rgba(191, 91, 49, 0.95), rgba(143, 52, 28, 0.95));
-      color: #fff8f5;
-    }
-
-    .step-card.active .muted { color: rgba(255,248,245,0.78); }
-
-    .step-index {
-      width: 34px;
-      height: 34px;
-      border-radius: 12px;
-      display: grid;
-      place-items: center;
-      font-weight: 800;
-      margin-bottom: 10px;
-      background: rgba(47, 110, 103, 0.1);
-      color: var(--teal);
-    }
-
-    .step-card.active .step-index {
-      background: rgba(255,255,255,0.15);
-      color: #fff;
-    }
-
-    .section {
-      margin-bottom: 18px;
-      background: linear-gradient(180deg, rgba(255,250,244,0.94), rgba(252,246,239,0.84));
-    }
-
-    .section-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: end;
-      gap: 16px;
-      margin-bottom: 18px;
-      flex-wrap: wrap;
-    }
-
-    .section-kicker {
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 8px;
-    }
-
-    .section-head h3 { font-size: 28px; }
-
-    .tool-chip {
-      background: rgba(47, 110, 103, 0.08);
-      border: 1px solid rgba(47, 110, 103, 0.12);
-      color: var(--teal);
-      box-shadow: none;
-    }
-
-    .upload-grid {
-      display: grid;
-      grid-template-columns: 1.1fr .9fr;
-      gap: 18px;
-    }
-
-    .upload-card {
-      padding: 18px;
-      border-radius: var(--radius);
-    }
-
-    .preview-grid,
-    .selection-grid,
-    .final-grid,
-    .poster-stage,
-    .progress-rail,
-    .asset-strip,
-    .form-grid,
-    .compare-body,
-    .poster-layout,
-    .export-layout {
-      display: grid;
-      gap: 16px;
-    }
-
-    .preview-grid {
-      grid-template-columns: 1fr 1fr;
-      margin-top: 18px;
-    }
-
-    .dropzone {
-      position: relative;
-      border: 2px dashed rgba(191, 91, 49, 0.28);
-      border-radius: 22px;
-      aspect-ratio: 1 / 1;
-      min-height: 0;
-      display: grid;
-      place-items: center;
-      text-align: center;
-      padding: 18px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.76), rgba(255,247,239,0.62));
-      overflow: hidden;
-    }
-
-    .dropzone img {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      object-position: center;
-      display: none;
-      padding: 24px;
-      background: rgba(255,255,255,0.72);
-    }
-
-    .dropzone.has-image img { display: block; }
-
-    .dropzone.has-image .dropzone-copy {
-      position: absolute;
-      left: 14px;
-      right: 14px;
-      bottom: 14px;
-      padding: 10px 12px;
-      border-radius: 16px;
-      background: rgba(48, 32, 23, 0.74);
-      color: #fff;
-      text-align: left;
-      backdrop-filter: blur(10px);
-    }
-
-    .dropzone-copy {
-      width: calc(100% - 28px);
-      margin-top: auto;
-    }
-
-    .dropzone input {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      cursor: pointer;
-    }
-
-    .primary-button,
-    .secondary-button,
-    .tiny-button {
-      border: none;
-      cursor: pointer;
-      font: inherit;
-      padding: 12px 16px;
-      border-radius: 16px;
-      font-weight: 800;
-    }
-
-    .primary-button {
-      color: #fff;
-      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-      box-shadow: 0 14px 28px rgba(143, 52, 28, 0.22);
-    }
-
-    .secondary-button,
-    .tiny-button {
-      color: var(--text);
-      background: rgba(255,255,255,0.82);
-      border: 1px solid rgba(191, 91, 49, 0.18);
-    }
-
-    .tiny-button {
-      padding: 8px 12px;
-      font-weight: 700;
-    }
-
-    .form-grid {
-      grid-template-columns: repeat(2, 1fr);
-      margin-top: 18px;
-    }
-
-    .field,
-    .textarea-field {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .field label,
-    .textarea-field label {
-      font-weight: 700;
-      color: #49392e;
-    }
-
-    .field input,
-    .field select,
-    .textarea-field textarea {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 12px 14px;
-      font: inherit;
-      color: var(--text);
-      background: rgba(255,255,255,0.88);
-      outline: none;
-    }
-
-    .textarea-field { grid-column: 1 / -1; }
-    .textarea-field textarea { min-height: 112px; resize: vertical; }
-
-    .analysis-scan {
-      height: 240px;
-      border-radius: 20px;
-      position: relative;
-      overflow: hidden;
-      background:
-        linear-gradient(180deg, #0f1720, #1f2a31 70%, #192129),
-        radial-gradient(circle at 72% 22%, rgba(219,159,62,.22), transparent 28%);
-    }
-
-    .analysis-scan::before,
-    .analysis-scan::after {
-      content: "";
-      position: absolute;
-      inset: 18px;
-      border-radius: 18px;
-    }
-
-    .analysis-scan::before {
-      border: 1px solid rgba(255,255,255,0.08);
-      background:
-        linear-gradient(transparent 23px, rgba(255,255,255,0.04) 24px),
-        linear-gradient(90deg, transparent 23px, rgba(255,255,255,0.04) 24px);
-      background-size: 24px 24px;
-    }
-
-    .analysis-scan::after {
-      inset: 24px auto auto 24px;
-      width: calc(100% - 48px);
-      height: 2px;
-      background: linear-gradient(90deg, transparent, rgba(219,159,62,0.95), transparent);
-      box-shadow: 0 0 26px rgba(219,159,62,0.7);
-      animation: scan 2.8s linear infinite;
-    }
-
-    @keyframes scan {
-      0% { transform: translateY(0); }
-      50% { transform: translateY(170px); }
-      100% { transform: translateY(0); }
-    }
-
-    .wireframe {
-      position: absolute;
-      inset: 34px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: rgba(255,255,255,0.9);
-      font-size: 72px;
-      font-weight: 800;
-      letter-spacing: -0.05em;
-      text-shadow: 0 0 24px rgba(255,255,255,0.12);
-    }
-
-    .selection-grid {
-      grid-template-columns: repeat(4, 1fr);
-      margin-top: 18px;
-    }
-
-    .final-grid {
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 18px;
-      align-items: stretch;
-    }
-
-    .selection-card,
-    .final-card,
-    .poster-tab {
-      border-radius: 24px;
-      overflow: hidden;
-      position: relative;
-      cursor: pointer;
-      transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease;
-      border: 2px solid transparent;
-    }
-
-    .selection-card.selected,
-    .final-card.selected { border-color: rgba(191, 91, 49, 0.86); }
-    .poster-tab.selected { border-color: rgba(47, 110, 103, 0.72); }
-
-    .selection-visual,
-    .final-visual,
-    .poster-visual {
-      min-height: 250px;
-      padding: 18px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .final-visual {
-      min-height: 0;
-      aspect-ratio: 1 / 1;
-    }
-
-    .final-card {
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.58);
-      box-shadow: 0 16px 34px rgba(72, 51, 36, 0.10);
-    }
-
-    .final-card .final-info {
-      min-height: 74px;
-      padding: 12px 14px 14px;
-      background: rgba(255, 252, 247, 0.9);
-    }
-
-    .final-card .final-info strong {
-      display: block;
-      font-size: 14px;
-      line-height: 1.35;
-    }
-
-    .poster-tab .poster-visual {
-      min-height: 0;
-      aspect-ratio: 1 / 1;
-    }
-
-    .selection-visual::before,
-    .final-visual::before,
-    .poster-visual::before {
-      content: "";
-      position: absolute;
-      inset: auto auto 14px 14px;
-      width: 74px;
-      height: 74px;
-      border-radius: 20px;
-      background: rgba(255,255,255,0.18);
-    }
-
-    .avatar {
-      position: absolute;
-      width: 132px;
-      height: 172px;
-      border-radius: 36px;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.38));
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.65), 0 20px 35px rgba(28, 22, 18, 0.2);
-    }
-
-    .avatar::before,
-    .avatar::after {
-      content: "";
-      position: absolute;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.65);
-    }
-
-    .avatar::before {
-      width: 104px;
-      height: 104px;
-      left: 14px;
-      top: -38px;
-    }
-
-    .avatar::after {
-      width: 148px;
-      height: 54px;
-      left: -8px;
-      bottom: 18px;
-      transform: rotate(-8deg);
-    }
-
-    .selection-info,
-    .final-info,
-    .poster-info {
-      padding: 16px 16px 18px;
-      background: rgba(255,250,244,0.96);
-    }
-
-    .select-badge {
-      position: absolute;
-      top: 14px;
-      right: 14px;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: rgba(48, 31, 22, 0.64);
-      color: #fff;
-      font-size: 12px;
-      font-weight: 800;
-      backdrop-filter: blur(10px);
-    }
-
-    .check-badge {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      width: 34px;
-      height: 34px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      background: rgba(255,255,255,0.88);
-      border: 1px solid rgba(191, 91, 49, 0.2);
-      color: transparent;
-      font-weight: 800;
-    }
-
-    .final-card.selected .check-badge {
-      background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-      color: #fff;
-      border-color: transparent;
-    }
-
-    .generated-shot {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: 0;
-    }
-
-    .selection-visual > *,
-    .final-visual > *,
-    .poster-visual > * {
-      position: relative;
-      z-index: 1;
-    }
-
-    .selection-visual.empty {
-      background: rgba(255, 255, 255, 0.42) !important;
-    }
-
-    .selection-visual.empty::before,
-    .poster-visual.empty::before,
-    .final-visual.empty::before {
-      display: none;
-    }
-
-    .poster-visual.empty,
-    .final-visual.empty {
-      background:
-        linear-gradient(135deg, rgba(191, 91, 49, 0.08), rgba(47, 110, 103, 0.08)),
-        rgba(255, 255, 255, 0.5) !important;
-    }
-
-    .final-visual.empty::after {
-      content: "待生成";
-      position: absolute;
-      left: 14px;
-      bottom: 14px;
-      z-index: 1;
-      padding: 5px 9px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.72);
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    .is-loading {
-      opacity: .7;
-      pointer-events: none;
-    }
-
-    .poster-layout { grid-template-columns: 1.05fr .95fr; margin-top: 18px; }
-    .poster-stage { grid-template-columns: 1fr; }
-
-    .poster-info {
-      display: grid;
-      gap: 10px;
-    }
-
-    .prompt-box {
-      border: 1px solid rgba(191, 91, 49, 0.14);
-      border-radius: 16px;
-      background: rgba(255,255,255,0.72);
-      padding: 12px 14px;
-    }
-
-    .prompt-label {
-      display: block;
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-
-    .prompt-text {
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      color: var(--text);
-      line-height: 1.75;
-    }
-
-    .prompt-editor {
-      width: 100%;
-      min-height: 168px;
-      border: 1px solid rgba(191, 91, 49, 0.16);
-      border-radius: 12px;
-      padding: 12px;
-      font: inherit;
-      color: var(--text);
-      background: rgba(255,255,255,0.9);
-      resize: vertical;
-      outline: none;
-      line-height: 1.7;
-    }
-
-    .prompt-editor:focus {
-      border-color: rgba(191, 91, 49, 0.45);
-      box-shadow: 0 0 0 3px rgba(191, 91, 49, 0.1);
-    }
-
-    .export-box { border-radius: 24px; padding: 20px; }
-
-    .progress-rail {
-      grid-template-columns: repeat(3, 1fr);
-      margin-top: 18px;
-    }
-
-    .progress-item {
-      padding: 14px;
-      border-radius: 18px;
-      background: rgba(255,255,255,0.74);
-      border: 1px solid rgba(191, 91, 49, 0.12);
-      opacity: .5;
-    }
-
-    .progress-item.unlocked { opacity: 1; }
-
-    .progress-item.done {
-      background: linear-gradient(135deg, rgba(47,110,103,0.96), rgba(28,73,68,0.96));
-      color: #f5fffd;
-    }
-
-    .progress-item.done .muted { color: rgba(245,255,253,0.8); }
-
-    .export-layout {
-      grid-template-columns: .92fr 1.08fr;
-      margin-top: 18px;
-    }
-
-    .asset-strip {
-      grid-template-columns: repeat(3, 1fr);
-      margin-top: 14px;
-    }
-
-    .asset {
-      min-height: 116px;
-      border-radius: 18px;
-      background:
-        linear-gradient(135deg, rgba(47,110,103,0.16), rgba(191,91,49,0.12)),
-        repeating-conic-gradient(from 45deg, #f2eadf 0 25%, #fbf5ee 0 50%);
-      background-size: auto, 26px 26px;
-      border: 1px solid rgba(47,110,103,0.12);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .asset::after {
-      content: "";
-      position: absolute;
-      inset: 18px;
-      border-radius: 20px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.82), rgba(255,255,255,0.26));
-    }
-
-    .footer-note {
-      background: linear-gradient(135deg, rgba(48,31,22,.95), rgba(47,110,103,.92));
-      color: #fffaf5;
-    }
-
-    .footer-note .muted { color: rgba(255,250,245,0.76); }
-
-    @media (max-width: 1180px) {
-      .upload-grid,
-      .poster-layout,
-      .export-layout { grid-template-columns: 1fr; }
-
-      .selection-grid { grid-template-columns: repeat(2, 1fr); }
-      .final-grid { grid-template-columns: repeat(3, 1fr); }
-      .step-tracker { grid-template-columns: 1fr 1fr; }
-    }
-
-    @media (max-width: 760px) {
-      .shell { width: min(100% - 24px, 1440px); }
-      .topbar { border-radius: 28px; align-items: flex-start; }
-      .poster-stage,
-      .step-tracker,
-      .selection-grid,
-      .progress-rail,
-      .asset-strip,
-      .preview-grid,
-      .form-grid { grid-template-columns: 1fr; }
-      .final-grid { grid-template-columns: repeat(2, 1fr); }
-      .section,
-      .hero-main,
-      .footer-note { padding: 20px; }
-      .section-head h3 { font-size: 24px; }
-    }
-
-    @media (max-width: 520px) {
-      .final-grid { grid-template-columns: 1fr; }
-    }
-  </style>
-</head>
-<body>
-  <div class="shell">
-    <div class="topbar glass">
-      <div class="brand">
-        <div class="logo">BV</div>
-        <div>
-          <h1>BrandVision AI 绘图智能体</h1>
-          <div class="muted">分阶段 AI 海报生成</div>
-        </div>
-      </div>
-      <div class="status-pills">
-        <div class="pill">阶段: <span id="currentStageText">录入阶段</span></div>
-        <div class="pill">已锁定 IP: <span id="lockedIpText">未确认</span></div>
-        <div class="pill">已锁定海报: <span id="lockedPosterText">未确认</span></div>
-      </div>
-    </div>
-
-
-    <section class="step-tracker">
-      <div class="step-card active" data-stage="0"><div class="step-index">01</div><strong>录入阶段</strong><div class="muted">上传素材与参数。</div></div>
-      <div class="step-card" data-stage="1"><div class="step-index">02</div><strong>IP 构筑</strong><div class="muted">确认唯一 IP。</div></div>
-      <div class="step-card" data-stage="2"><div class="step-index">03</div><strong>布局设计</strong><div class="muted">选择构图方向。</div></div>
-      <div class="step-card" data-stage="3"><div class="step-index">04</div><strong>成品精修</strong><div class="muted">输出高清终稿。</div></div>
-    </section>
-
-    <section class="section glass" id="uploadSection">
-      <div class="section-head">
-        <div>
-          <div class="section-kicker">Stage 01</div>
-          <h3>素材上传</h3>
-          <div class="muted">先录入素材与风格参数。</div>
-        </div>
-      </div>
-
-      <div class="upload-grid">
-        <div class="upload-card">
-          <div class="selection-meta" style="justify-content:space-between;align-items:center;margin-bottom:12px">
-            <strong>素材上传区</strong>
-          </div>
-
-          <div class="preview-grid">
-            <label class="dropzone" id="ipDropzone">
-              <img id="ipPreview" alt="手绘 IP 预览">
-              <input type="file" id="ipInput" accept="image/*">
-              <div class="dropzone-copy">
-                <strong>上传手绘 IP</strong>
-                <div class="muted">PNG / JPG / WebP</div>
-              </div>
-            </label>
-
-            <label class="dropzone" id="productDropzone">
-              <img id="productPreview" alt="产品白底图预览">
-              <input type="file" id="productInput" accept="image/*">
-              <div class="dropzone-copy">
-                <strong>上传产品白底图</strong>
-                <div class="muted">建议使用白底图</div>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <div class="upload-card">
-          <strong>配置信息</strong>
-          <div class="form-grid">
-            <div class="field">
-              <label for="apiKey">API Key</label>
-              <input id="apiKey" type="password" placeholder="输入 API Key">
-            </div>
-            <div class="field">
-              <label for="apiHost">接口地址</label>
-              <input id="apiHost" placeholder="例如：https://jeniya.cn/">
-            </div>
-            <div class="field">
-              <label for="textModel">文本模型</label>
-              <input id="textModel" type="text" placeholder="例如：gemini-3.1-flash-lite-preview">
-            </div>
-            <div class="field">
-              <label for="imageModel">出图模型</label>
-              <input id="imageModel" type="text" placeholder="例如：gemini-3.1-flash-image-preview">
-            </div>
-            <div class="field"><label for="sceneType">海报使用场景</label><select id="sceneType"><option>电商主图</option><option>线下展架</option><option>社媒海报</option><option>品牌快闪活动</option></select></div>
-          </div>
-          <div class="cta-row" style="margin-top:18px">
-            <button class="secondary-button" type="button" id="saveConfig">保存配置</button>
-            <button class="primary-button" type="button" id="confirmUpload">生成 4 个 IP 方案</button>
-            <button class="secondary-button" type="button" id="resetAll">重置流程</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section glass" id="ipSection">
-      <div class="section-head">
-        <div>
-          <div class="section-kicker">Stage 02</div>
-          <h3>IP 选择</h3>
-        </div>
-      </div>
-
-      <div class="selection-grid" id="ipGrid">
-        <article class="selection-card" data-type="ip" data-id="方案 1" data-name="方案 1">
-          <div class="selection-visual empty"></div>
-          <div class="selection-info"><strong>方案 1</strong><div class="muted">等待生成</div></div>
-        </article>
-        <article class="selection-card" data-type="ip" data-id="方案 2" data-name="方案 2">
-          <div class="selection-visual empty"></div>
-          <div class="selection-info"><strong>方案 2</strong><div class="muted">等待生成</div></div>
-        </article>
-        <article class="selection-card" data-type="ip" data-id="方案 3" data-name="方案 3">
-          <div class="selection-visual empty"></div>
-          <div class="selection-info"><strong>方案 3</strong><div class="muted">等待生成</div></div>
-        </article>
-        <article class="selection-card" data-type="ip" data-id="方案 4" data-name="方案 4">
-          <div class="selection-visual empty"></div>
-          <div class="selection-info"><strong>方案 4</strong><div class="muted">等待生成</div></div>
-        </article>
-      </div>
-
-      <div class="cta-row" style="margin-top:18px">
-        <button class="primary-button" type="button" id="confirmIp">生成 4 个文字方案</button>
-      </div>
-    </section>
-
-    <section class="section glass" id="posterSection">
-      <div class="section-head">
-        <div>
-          <div class="section-kicker">Stage 03</div>
-          <h3>海报方案</h3>
-        </div>
-      </div>
-
-      <div class="poster-stage" id="posterGrid">
-        <article class="poster-tab" data-id="方案1">
-          <div class="poster-info">
-            <strong>方案1</strong>
-            <div class="muted"></div>
-            <div class="prompt-box">
-              <span class="prompt-label">提示词</span>
-              <textarea class="prompt-editor" placeholder="选中该方案后可编辑提示词"></textarea>
-            </div>
-            <button class="secondary-button poster-regen" type="button" data-index="0">重生成此方案</button>
-          </div>
-        </article>
-        <article class="poster-tab" data-id="方案2">
-          <div class="poster-info">
-            <strong>方案2</strong>
-            <div class="muted"></div>
-            <div class="prompt-box">
-              <span class="prompt-label">提示词</span>
-              <textarea class="prompt-editor" placeholder="选中该方案后可编辑提示词"></textarea>
-            </div>
-            <button class="secondary-button poster-regen" type="button" data-index="1">重生成此方案</button>
-          </div>
-        </article>
-        <article class="poster-tab" data-id="方案3">
-          <div class="poster-info">
-            <strong>方案3</strong>
-            <div class="muted"></div>
-            <div class="prompt-box">
-              <span class="prompt-label">提示词</span>
-              <textarea class="prompt-editor" placeholder="选中该方案后可编辑提示词"></textarea>
-            </div>
-            <button class="secondary-button poster-regen" type="button" data-index="2">重生成此方案</button>
-          </div>
-        </article>
-        <article class="poster-tab" data-id="方案4">
-          <div class="poster-info">
-            <strong>方案4</strong>
-            <div class="muted"></div>
-            <div class="prompt-box">
-              <span class="prompt-label">提示词</span>
-              <textarea class="prompt-editor" placeholder="选中该方案后可编辑提示词"></textarea>
-            </div>
-            <button class="secondary-button poster-regen" type="button" data-index="3">重生成此方案</button>
-          </div>
-        </article>
-      </div>
-
-      <div class="cta-row" style="margin-top:18px">
-        <button class="primary-button" type="button" id="confirmPoster">根据已选方案生成 5 张终稿</button>
-      </div>
-    </section>
-
-    <section class="section glass" id="finalSection">
-      <div class="section-head">
-        <div>
-          <div class="section-kicker">Stage 04</div>
-          <h3>终稿输出</h3>
-        </div>
-      </div>
-
-      <div class="final-grid" id="finalGrid">
-        <article class="final-card" data-id="终稿 01"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 01</strong><div class="muted">等待生成</div></div></article>
-        <article class="final-card" data-id="终稿 02"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 02</strong><div class="muted">等待生成</div></div></article>
-        <article class="final-card" data-id="终稿 03"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 03</strong><div class="muted">等待生成</div></div></article>
-        <article class="final-card" data-id="终稿 04"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 04</strong><div class="muted">等待生成</div></div></article>
-        <article class="final-card" data-id="终稿 05"><div class="final-visual empty"><div class="check-badge">✓</div></div><div class="final-info"><strong>终稿 05</strong><div class="muted">等待生成</div></div></article>
-      </div>
-
-      <div class="export-layout">
-        <div class="export-box">
-          <h4>导出</h4>
-          <ul>
-            <li>包含已选 3D IP 图。</li>
-            <li>包含已选方案文字稿与提示词。</li>
-            <li>包含勾选的终稿图。</li>
-          </ul>
-          <div class="cta-row" style="margin-top:18px">
-            <button class="primary-button" type="button" id="exportBtn">确认终稿并导出资产包</button>
-            <button class="secondary-button" type="button">下载流程记录</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-  </div>
-  <script>
-    const CONFIG_KEY = "brandvision_ai_config_v2";
+const CONFIG_KEY = "brandvision_ai_config_v2";
     const REQUEST_TIMEOUT_MS = 60 * 1000;
     const REQUEST_RETRY_LIMIT = 1;
     const FIXTURE_MANIFEST_PATH = "/external-fixtures/current/manifest.json";
@@ -2023,6 +979,408 @@
     void ensureFixtureManifestLoaded().catch(() => undefined);
     updateCompare("");
     setStage(0);
-  </script>
-</body>
-</html>
+
+
+/* scripted-ip-upload-workflow:start */
+(function () {
+  const uploadStatusEl = document.getElementById("uploadStatus");
+  const ipInputEl = document.getElementById("ipInput");
+  const productInputEl = document.getElementById("productInput");
+  const resetAllBtn = document.getElementById("resetAll");
+  const maxEdge = 1536;
+  const maxBytes = 4 * 1024 * 1024;
+  const imagePreprocessFailureMessage = "Image preprocessing failed: the uploaded file could not be reduced to the supported size profile. Please try another image with a simpler background or lower native resolution.";
+  const originalReadPreview = readPreview;
+  const originalHandleGenerateIp = handleGenerateIp;
+
+  state.uploadDiagnostics = state.uploadDiagnostics || { ip: null, product: null };
+
+  function setUploadStatus(message, type) {
+    if (!uploadStatusEl) {
+      return;
+    }
+    if (!message) {
+      uploadStatusEl.textContent = "";
+      uploadStatusEl.dataset.state = "idle";
+      return;
+    }
+    uploadStatusEl.textContent = message;
+    uploadStatusEl.dataset.state = type || "info";
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = event => resolve(event.target.result);
+      reader.onerror = () => reject(new Error("文件读取失败"));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function loadImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("图片尺寸读取失败"));
+      img.src = dataUrl;
+    });
+  }
+
+  function canvasToBlob(canvas, mimeType, quality) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(blob => {
+        if (!blob) {
+          reject(new Error("图片压缩失败"));
+          return;
+        }
+        resolve(blob);
+      }, mimeType, quality);
+    });
+  }
+
+  async function preprocessImage(file) {
+    const originalDataUrl = await fileToDataUrl(file);
+    const sourceImage = await loadImage(originalDataUrl);
+    const longestEdge = Math.max(sourceImage.naturalWidth, sourceImage.naturalHeight) || 1;
+    const scale = longestEdge > maxEdge ? maxEdge / longestEdge : 1;
+    const width = Math.max(1, Math.round(sourceImage.naturalWidth * scale));
+    const height = Math.max(1, Math.round(sourceImage.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error(imagePreprocessFailureMessage);
+    }
+    context.drawImage(sourceImage, 0, 0, width, height);
+
+    const candidates = [
+      { mimeType: file.type === "image/png" ? "image/png" : "image/jpeg", quality: 0.92 },
+      { mimeType: "image/jpeg", quality: 0.88 },
+      { mimeType: "image/jpeg", quality: 0.8 },
+      { mimeType: "image/jpeg", quality: 0.72 },
+      { mimeType: "image/jpeg", quality: 0.64 },
+      { mimeType: "image/jpeg", quality: 0.56 }
+    ];
+
+    let chosenBlob = null;
+    let chosenMimeType = file.type || "image/png";
+    for (const candidate of candidates) {
+      const blob = await canvasToBlob(canvas, candidate.mimeType, candidate.quality);
+      if (!chosenBlob || blob.size < chosenBlob.size) {
+        chosenBlob = blob;
+        chosenMimeType = candidate.mimeType;
+      }
+      if (blob.size <= maxBytes) {
+        chosenBlob = blob;
+        chosenMimeType = candidate.mimeType;
+        break;
+      }
+    }
+
+    if (!chosenBlob || chosenBlob.size > maxBytes) {
+      throw new Error(imagePreprocessFailureMessage);
+    }
+
+    const dataUrl = await blobToDataUrl(chosenBlob);
+    return {
+      name: file.name,
+      mimeType: chosenMimeType,
+      size: chosenBlob.size,
+      width,
+      height,
+      longestEdge: Math.max(width, height),
+      dataUrl,
+      wasCompressed: scale < 1 || chosenBlob.size !== file.size || chosenMimeType !== (file.type || "image/png")
+    };
+  }
+
+  async function applyCompressedPreview(input, img, wrapper, key) {
+    const file = input.files && input.files[0];
+    if (!file) {
+      return;
+    }
+    await originalReadPreview(input, img, wrapper, key);
+    setUploadStatus("", "idle");
+    const processed = await preprocessImage(file);
+    img.src = processed.dataUrl;
+    wrapper.classList.add("has-image");
+    state.refs[key] = {
+      name: processed.name,
+      mimeType: processed.mimeType,
+      data: processed.dataUrl.split(",")[1],
+      dataUrl: processed.dataUrl,
+      size: processed.size,
+      width: processed.width,
+      height: processed.height,
+      longestEdge: processed.longestEdge
+    };
+    state.inputVersion[key] = (state.inputVersion[key] || 0) + 1;
+    state.uploadDiagnostics[key] = processed;
+    setUploadStatus(processed.wasCompressed ? "Reference image prepared for generation. Size and resolution were optimized automatically." : "Reference image is ready for generation.", processed.wasCompressed ? "success" : "info");
+  }
+
+  async function runGenerateIp() {
+    const originalText = confirmUploadBtn.textContent;
+    confirmUploadBtn.disabled = true;
+    confirmUploadBtn.textContent = "正在生成...";
+    try {
+      setUploadStatus("", "idle");
+      await originalHandleGenerateIp();
+    } catch (error) {
+      setUploadStatus(error.message || "生成失败。", "error");
+    } finally {
+      confirmUploadBtn.disabled = false;
+      confirmUploadBtn.textContent = originalText;
+    }
+  }
+
+  ipInputEl.addEventListener("change", event => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void applyCompressedPreview(ipInputEl, document.getElementById("ipPreview"), document.getElementById("ipDropzone"), "ip").catch(error => {
+      setUploadStatus(error.message || imagePreprocessFailureMessage, "error");
+    });
+  }, true);
+
+  productInputEl.addEventListener("change", event => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void applyCompressedPreview(productInputEl, document.getElementById("productPreview"), document.getElementById("productDropzone"), "product").catch(error => {
+      setUploadStatus(error.message || imagePreprocessFailureMessage, "error");
+    });
+  }, true);
+
+  confirmUploadBtn.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void runGenerateIp();
+  }, true);
+
+  resetAllBtn.addEventListener("click", () => {
+    setUploadStatus("", "idle");
+    state.uploadDiagnostics = { ip: null, product: null };
+  }, true);
+})();
+/* scripted-ip-upload-workflow:end */
+
+
+/* scripted-ip-knowledge-workflow:start */
+(function () {
+  const knowledgeBasePath = "./data/knowledge-base.json";
+  const knowledgeButton = document.getElementById("knowledgeBaseButton");
+  const knowledgeBackdrop = document.getElementById("knowledgeBaseBackdrop");
+  const knowledgeDrawer = document.getElementById("knowledgeBaseDrawer");
+  const knowledgeClose = document.getElementById("knowledgeBaseClose");
+  const knowledgeTabs = document.getElementById("knowledgeBaseTabs");
+  const knowledgeContent = document.getElementById("knowledgeBaseContent");
+  const posterStatus = document.getElementById("posterGenerationStatus");
+  const finalStatus = document.getElementById("finalGenerationStatus");
+  const resetWorkflowButton = document.getElementById("resetAll");
+  const originalHandleGeneratePosterText = handleGeneratePosterText;
+  const originalHandleGenerateFinal = handleGenerateFinal;
+  const statusIntervals = new Map();
+  let knowledgeBasePromise;
+  let knowledgeBase;
+  let activeCategoryId = "brand";
+  let previousFocus;
+
+  const generationMessages = {
+    poster: [
+      "正在分析已锁定的 IP 与产品信息",
+      "正在提炼品牌定位与核心卖点",
+      "正在读取知识库并调整生成效果",
+      "正在校验功效边界与违禁表达",
+      "正在组装 4 组可执行提示词"
+    ],
+    final: [
+      "正在锁定海报构图与主体关系",
+      "正在读取知识库并调整生成效果",
+      "正在适配品牌色与柔光氛围",
+      "正在检查违禁元素与合规边界",
+      "正在渲染 5 张终稿方案"
+    ]
+  };
+
+  async function ensureKnowledgeBaseLoaded() {
+    if (knowledgeBase) return knowledgeBase;
+    if (!knowledgeBasePromise) {
+      knowledgeBasePromise = fetch(knowledgeBasePath, { cache: "no-store" })
+        .then(response => {
+          if (!response.ok) throw new Error("知识库摘要加载失败");
+          return response.json();
+        })
+        .then(data => {
+          knowledgeBase = data;
+          return data;
+        })
+        .catch(error => {
+          knowledgeBasePromise = null;
+          throw error;
+        });
+    }
+    return knowledgeBasePromise;
+  }
+
+  function createKnowledgeCard(item) {
+    const card = document.createElement("article");
+    card.className = "knowledge-card";
+    const title = document.createElement("strong");
+    title.textContent = item.title || "知识条目";
+    const content = document.createElement("p");
+    content.textContent = item.content || "";
+    card.append(title, content);
+    return card;
+  }
+
+  function renderKnowledgeCategory(categoryId) {
+    if (!knowledgeBase || !knowledgeContent) return;
+    activeCategoryId = categoryId;
+    const category = (knowledgeBase.categories || []).find(item => item.id === categoryId);
+    knowledgeTabs && knowledgeTabs.querySelectorAll(".knowledge-tab").forEach(tab => {
+      tab.setAttribute("aria-selected", String(tab.dataset.category === categoryId));
+    });
+    knowledgeContent.replaceChildren();
+    if (!category) {
+      knowledgeContent.textContent = "当前分类暂无摘要。";
+      return;
+    }
+    const summary = document.createElement("p");
+    summary.className = "knowledge-category-summary";
+    summary.textContent = category.summary || "";
+    knowledgeContent.append(summary);
+    (category.items || []).forEach(item => knowledgeContent.append(createKnowledgeCard(item)));
+  }
+
+  function renderKnowledgeTabs() {
+    if (!knowledgeBase || !knowledgeTabs) return;
+    knowledgeTabs.replaceChildren();
+    (knowledgeBase.categories || []).forEach(category => {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "knowledge-tab";
+      tab.dataset.category = category.id;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", String(category.id === activeCategoryId));
+      tab.textContent = category.title;
+      tab.addEventListener("click", () => renderKnowledgeCategory(category.id));
+      knowledgeTabs.append(tab);
+    });
+    renderKnowledgeCategory(activeCategoryId);
+  }
+
+  async function openKnowledgeBase() {
+    previousFocus = document.activeElement;
+    knowledgeBackdrop.hidden = false;
+    knowledgeDrawer.dataset.open = "true";
+    knowledgeDrawer.setAttribute("aria-hidden", "false");
+    knowledgeButton.setAttribute("aria-expanded", "true");
+    try {
+      await ensureKnowledgeBaseLoaded();
+      renderKnowledgeTabs();
+    } catch (error) {
+      knowledgeContent.textContent = error.message || "知识库摘要加载失败。";
+    }
+    knowledgeClose.focus();
+  }
+
+  function closeKnowledgeBase() {
+    knowledgeDrawer.dataset.open = "false";
+    knowledgeDrawer.setAttribute("aria-hidden", "true");
+    knowledgeButton.setAttribute("aria-expanded", "false");
+    knowledgeBackdrop.hidden = true;
+    if (previousFocus && typeof previousFocus.focus === "function") previousFocus.focus();
+  }
+
+  function stopGenerationStatus(statusElement) {
+    if (!statusElement) return;
+    const existing = statusIntervals.get(statusElement.id);
+    if (existing) clearInterval(existing);
+    statusIntervals.delete(statusElement.id);
+    statusElement.dataset.active = "false";
+  }
+
+  function startGenerationStatus(statusElement, messages) {
+    stopGenerationStatus(statusElement);
+    if (!statusElement) return;
+    const textElement = statusElement.querySelector(".generation-status-text");
+    const progressElement = statusElement.querySelector(".generation-progress > span");
+    let messageIndex = 0;
+    statusElement.dataset.active = "true";
+    if (textElement) textElement.textContent = messages[0];
+    if (progressElement) {
+      progressElement.style.animation = "none";
+      void progressElement.offsetWidth;
+      progressElement.style.animation = "";
+    }
+    const interval = setInterval(() => {
+      messageIndex = Math.min(messageIndex + 1, messages.length - 1);
+      if (textElement) textElement.textContent = messages[messageIndex];
+      if (messageIndex === messages.length - 1) {
+        clearInterval(interval);
+        statusIntervals.delete(statusElement.id);
+      }
+    }, 2000);
+    statusIntervals.set(statusElement.id, interval);
+  }
+
+  function stopAllGenerationStatus() {
+    stopGenerationStatus(posterStatus);
+    stopGenerationStatus(finalStatus);
+  }
+
+  async function runKnowledgeGeneration(button, pendingText, statusElement, messages, task) {
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = pendingText;
+    startGenerationStatus(statusElement, messages);
+    try {
+      await ensureKnowledgeBaseLoaded();
+      await task();
+    } catch (error) {
+      alert(error.message || "生成失败。");
+    } finally {
+      stopGenerationStatus(statusElement);
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+
+  knowledgeButton.addEventListener("click", () => { void openKnowledgeBase(); });
+  knowledgeClose.addEventListener("click", closeKnowledgeBase);
+  knowledgeBackdrop.addEventListener("click", closeKnowledgeBase);
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && knowledgeDrawer.dataset.open === "true") closeKnowledgeBase();
+  });
+
+  state.disableBackgroundGeneration = true;
+
+  confirmIpBtn.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void runKnowledgeGeneration(confirmIpBtn, "正在生成...", posterStatus, generationMessages.poster, originalHandleGeneratePosterText);
+  }, true);
+
+  confirmPosterBtn.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    void runKnowledgeGeneration(confirmPosterBtn, "正在生成...", finalStatus, generationMessages.final, originalHandleGenerateFinal);
+  }, true);
+
+  document.querySelectorAll(".poster-regen").forEach(button => {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const slotIndex = Number(button.dataset.index || 0);
+      void runKnowledgeGeneration(button, "正在生成...", posterStatus, generationMessages.poster, () => handleRegenerateSinglePosterText(slotIndex, button));
+    }, true);
+  });
+
+  resetWorkflowButton.addEventListener("click", () => {
+    stopAllGenerationStatus();
+    closeKnowledgeBase();
+  }, true);
+
+  void ensureKnowledgeBaseLoaded().catch(error => console.error("[knowledge-base]", error));
+})();
+/* scripted-ip-knowledge-workflow:end */
