@@ -1392,8 +1392,11 @@
     }
 
     function clearGeneratedImage(card) {
-      const img = card.querySelector(".generated-shot");
+      const visual = card.querySelector(".selection-visual, .poster-visual, .final-visual");
+      if (!visual) return;
+      const img = visual.querySelector(".generated-shot");
       if (img) img.remove();
+      visual.classList.add("empty");
     }
 
     function setStageCardsLoading(selector, loading) {
@@ -1645,6 +1648,7 @@
     function applyGeneratedImage(card, dataUrl) {
       const visual = card.querySelector(".selection-visual, .poster-visual, .final-visual");
       if (!visual) return;
+      visual.classList.remove("empty");
       let img = visual.querySelector(".generated-shot");
       if (!img) {
         img = document.createElement("img");
