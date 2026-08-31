@@ -2,7 +2,9 @@
 # Licensed under the MIT License.
 
 [CmdletBinding()]
-param()
+param(
+	[string]$AppVersion
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -36,7 +38,9 @@ if (-not (Test-Path -LiteralPath $installerScript)) {
 }
 
 $packageJson = Get-Content -LiteralPath (Join-Path $repoRoot 'package.json') -Raw | ConvertFrom-Json
-$appVersion = [string]$packageJson.version
+if ([string]::IsNullOrWhiteSpace($AppVersion)) {
+	$AppVersion = [string]$packageJson.version
+}
 
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 Remove-Item -LiteralPath $setupExe -Force -ErrorAction SilentlyContinue
@@ -45,7 +49,7 @@ Write-Host "Building VS Code AI Coding installer..."
 Write-Host "Source: $repoRoot"
 Write-Host "Output: $setupExe"
 
-& $iscc "/DAppVersion=""$appVersion""" $installerScript
+& $iscc "/DAppVersion=$AppVersion" $installerScript
 
 if ($LASTEXITCODE -ne 0) {
 	throw "Inno Setup failed with exit code $LASTEXITCODE."

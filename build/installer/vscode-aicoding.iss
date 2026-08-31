@@ -12,8 +12,9 @@ AppId={{B2C14D08-1E63-47A9-9E14-AC8F498C8E48}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=VS Code AI Coding
-DefaultDirName=D:\VSCodeAICoding
+DefaultDirName={localappdata}\Programs\VS Code AI Coding
 DefaultGroupName={#AppName}
+DisableDirPage=no
 DisableProgramGroupPage=yes
 AllowNoIcons=yes
 OutputDir=..\..\dist-installer
@@ -24,6 +25,9 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\.build\electron\Code - OSS.exe
 
+[Languages]
+Name: "chinesesimplified"; MessagesFile: ".\ChineseSimplified.isl"
+
 [Files]
 Source: "..\..\.npmrc"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\.nvmrc"; DestDir: "{app}"; Flags: ignoreversion
@@ -33,6 +37,7 @@ Source: "..\..\CodeQL.yml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\eslint.config.js"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\gulpfile.mjs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\install-vscode-dev-deps.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\launch-vscode-aicoding.vbs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\package-lock.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\package.json"; DestDir: "{app}"; Flags: ignoreversion
@@ -57,8 +62,11 @@ Source: "..\..\src\*"; DestDir: "{app}\src"; Flags: ignoreversion recursesubdirs
 Source: "..\..\vibe-demo\*"; DestDir: "{app}\vibe-demo"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#ExcludedPaths}"
 
 [Icons]
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\start-vscode-dev.bat"; WorkingDir: "{app}"; IconFilename: "{app}\.build\electron\Code - OSS.exe"
-Name: "{group}\{#AppName}"; Filename: "{app}\start-vscode-dev.bat"; WorkingDir: "{app}"; IconFilename: "{app}\.build\electron\Code - OSS.exe"
+Name: "{autodesktop}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-vscode-aicoding.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\.build\electron\Code - OSS.exe"; Comment: "启动 VS Code AI Coding"
+Name: "{group}\{#AppName}"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-vscode-aicoding.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\.build\electron\Code - OSS.exe"; Comment: "启动 VS Code AI Coding"
+
+[Run]
+Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch-vscode-aicoding.vbs"""; WorkingDir: "{app}"; Description: "立即启动 VS Code AI Coding"; Flags: nowait postinstall skipifsilent
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -80,7 +88,7 @@ begin
 		if (not Ok) or (ResultCode <> 0) then
 		begin
 			MsgBox(
-				'Dependency setup failed. Open install-vscode-dev-deps.log in the install directory, then run install-vscode-dev-deps.bat again.',
+				'运行环境初始化失败。请打开安装目录中的 install-vscode-dev-deps.log 查看详情，然后重新运行 install-vscode-dev-deps.bat。',
 				mbError,
 				MB_OK
 			);
