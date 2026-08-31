@@ -1653,10 +1653,16 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		await ensureTextFile(workflow.scriptFile, scriptFileExists);
 		await ensureTextFile(workflow.planFile, planFileExists);
 		await ensureTextFile(workflow.readmeFile, readmeFileExists);
-		await ensureTextFile(workflow.fixtureManifestFile, fixtureManifestFileExists);
+		if (!fixtureManifestFileExists) {
+			await this.fileService.createFile(workflow.fixtureManifestFile, VSBuffer.fromString(projectFiles.fixtureManifestJson));
+			newlyCreatedResources.push(workflow.fixtureManifestFile);
+		}
 		for (const fixtureAsset of projectFiles.fixtureAssets) {
 			const fixtureAssetFile = URI.joinPath(workflow.currentFixturesDirectory, fixtureAsset.filename);
-			await ensureTextFile(fixtureAssetFile, await this.fileService.exists(fixtureAssetFile));
+			if (!await this.fileService.exists(fixtureAssetFile)) {
+				await this.fileService.createFile(fixtureAssetFile, VSBuffer.fromString(fixtureAsset.content));
+				newlyCreatedResources.push(fixtureAssetFile);
+			}
 		}
 		await ensureTextFile(workflow.assetNotesFile, assetNotesFileExists);
 
@@ -2532,10 +2538,6 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		);
 		await this.fileService.writeFile(workflow.planFile, VSBuffer.fromString(projectFiles.planJson));
 		await this.fileService.writeFile(workflow.readmeFile, VSBuffer.fromString(projectFiles.readme));
-		await this.fileService.writeFile(workflow.fixtureManifestFile, VSBuffer.fromString(projectFiles.fixtureManifestJson));
-		for (const fixtureAsset of projectFiles.fixtureAssets) {
-			await this.fileService.writeFile(URI.joinPath(workflow.currentFixturesDirectory, fixtureAsset.filename), VSBuffer.fromString(fixtureAsset.content));
-		}
 		await this.fileService.writeFile(workflow.assetNotesFile, VSBuffer.fromString(projectFiles.assetNotes));
 	}
 
@@ -2708,12 +2710,8 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			[workflow.scriptFile, projectFiles.js],
 			[workflow.planFile, projectFiles.planJson],
 			[workflow.readmeFile, projectFiles.readme],
-			[workflow.fixtureManifestFile, projectFiles.fixtureManifestJson],
 			[workflow.assetNotesFile, projectFiles.assetNotes]
 		];
-		for (const fixtureAsset of projectFiles.fixtureAssets) {
-			checks.push([URI.joinPath(workflow.currentFixturesDirectory, fixtureAsset.filename), fixtureAsset.content]);
-		}
 
 		for (const [resource, expected] of checks) {
 			const actual = await this.tryReadFileContent(resource);
@@ -2732,10 +2730,6 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		await this.streamScriptedWorkflowFile(workflow.scriptFile, '交互逻辑', projectFiles.js, 'javascript', '正在整理页面交互与状态逻辑。', 9000, 22, progress);
 		await this.streamScriptedWorkflowFile(workflow.planFile, '页面配置', projectFiles.planJson, 'json', '正在写入页面配置与本轮方案摘要。', 3200, 8, progress);
 		await this.streamScriptedWorkflowFile(workflow.readmeFile, '项目说明', projectFiles.readme, 'markdown', '正在补充目录说明与使用提示。', 2600, 6, progress);
-		await this.streamScriptedWorkflowFile(workflow.fixtureManifestFile, '演示结果清单', projectFiles.fixtureManifestJson, 'json', '正在写入演示结果与展示清单。', 2200, 5, progress);
-		for (const fixtureAsset of projectFiles.fixtureAssets) {
-			await this.fileService.writeFile(URI.joinPath(workflow.currentFixturesDirectory, fixtureAsset.filename), VSBuffer.fromString(fixtureAsset.content));
-		}
 		await this.streamScriptedWorkflowFile(workflow.assetNotesFile, '素材说明', projectFiles.assetNotes, 'markdown', '正在补充素材目录说明。', 2200, 5, progress);
 	}
 

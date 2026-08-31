@@ -1318,6 +1318,13 @@
       return state.fixtureManifestPromise;
     }
 
+    function resetFixtureCache() {
+      state.fixtureManifest = null;
+      state.fixtureManifestPromise = null;
+      state.fixtureAssetCache = {};
+      state.fixturesLoaded = false;
+    }
+
     async function resolveFixtureImageData(imagePath) {
       if (!imagePath) {
         return "";
@@ -1345,7 +1352,10 @@
       return `终稿 ${String(index + 1).padStart(2, "0")}`;
     }
 
-    async function getFixtureEntries(stageName) {
+    async function getFixtureEntries(stageName, refresh = false) {
+      if (refresh) {
+        resetFixtureCache();
+      }
       const manifest = await ensureFixtureManifestLoaded();
       const sourceEntries = Array.isArray(manifest?.[stageName]) ? manifest[stageName] : [];
       const entries = [];
@@ -1726,7 +1736,7 @@
       const token = bumpRevealToken("ip");
       const prompt = buildIpImagePrompt();
       const cards = Array.from(document.querySelectorAll(".selection-card"));
-      const fixturePromise = getFixtureEntries("ip");
+      const fixturePromise = getFixtureEntries("ip", true);
       cards.forEach((card, i) => {
         const id = `方案 ${i + 1}`;
         card.dataset.id = id;
@@ -1758,7 +1768,7 @@
     async function handleGeneratePosterText() {
       if (!state.selectedIp) throw new Error("请先选择 1 个 IP 方案。");
       const token = bumpRevealToken("poster");
-      const fixturePromise = getFixtureEntries("poster");
+      const fixturePromise = getFixtureEntries("poster", true);
       setStageCardsLoading(".poster-tab", true);
       startBackgroundTask("poster", () => {
         if (!hasReadyTextModel()) {
@@ -1783,7 +1793,7 @@
       const token = bumpRevealToken("posterSlot", slotIndex);
       const oldId = card.dataset.id;
       const original = button.textContent;
-      const fixturePromise = getFixtureEntries("poster");
+      const fixturePromise = getFixtureEntries("poster", true);
       button.disabled = true;
       button.textContent = "正在生成...";
       card.classList.add("is-loading");
@@ -1825,7 +1835,7 @@
         "提升质感、细节、光影与完成度。",
         "输出 1:1 成品海报。"
       ].join("\n");
-      const fixturePromise = getFixtureEntries("final");
+      const fixturePromise = getFixtureEntries("final", true);
       document.querySelectorAll(".final-card").forEach((card, index) => {
         const title = card.querySelector("strong");
         const desc = card.querySelector(".muted");
@@ -1982,6 +1992,7 @@
 
     document.getElementById("resetAll").addEventListener("click", () => {
       invalidateRevealTokens();
+      resetFixtureCache();
       state.stage = 0;
       state.selectedIp = "";
       state.selectedPoster = "";
@@ -2021,7 +2032,6 @@
     });
 
     loadConfig();
-    void ensureFixtureManifestLoaded().catch(() => undefined);
     updateCompare("");
     setStage(0);
   </script>
