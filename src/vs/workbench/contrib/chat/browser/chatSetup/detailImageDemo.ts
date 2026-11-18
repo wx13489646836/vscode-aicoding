@@ -17,8 +17,9 @@ import { join } from '../../../../../base/common/path.js';
 import { isNative } from '../../../../../base/common/platform.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
-import { getCodeEditor } from '../../../../../editor/browser/editorBrowser.js';
+import { getCodeEditor, ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
+import { ITextModel } from '../../../../../editor/common/model.js';
 import { IModelService } from '../../../../../editor/common/services/model.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { InstantiationType, registerSingleton } from '../../../../../platform/instantiation/common/extensions.js';
@@ -187,10 +188,7 @@ class DetailImageDemo extends Disposable implements IDetailImageDemo {
 					return;
 				}
 				if (!current.version) {
-					await report('我会先写入工作台的上传、选风格和出图逻辑，然后打开 V1。\n\n');
-					pending('正在生成 V1 代码…');
-					await this.streamCode(1, token);
-					await this.publish(current, 1);
+					await this.buildV1(current, report, pending, token);
 					await report('**V1 已生成并打开。** 可以在「商品详情图 · V1」标签页上传白底商品图，从商品名称开始测试。');
 					return;
 				}
@@ -223,7 +221,7 @@ class DetailImageDemo extends Disposable implements IDetailImageDemo {
 				if (message.includes('4096')) {
 					await report('我会在上传阶段统一处理商品图和风格参考图。超过限制的图片会按原比例缩放，再交给出图流程。\n\n');
 					pending('正在写入 V2 的图片预处理逻辑…');
-					await this.streamCode(2, token);
+					await this.streamV2Code(token);
 					await this.publish(current, 2);
 					await report('**V2 已生成并打开。** 商品图和风格参考图会在上传后等比缩到长边 2048 像素以内。可以重新上传原图验证。');
 					return;
@@ -282,31 +280,76 @@ class DetailImageDemo extends Disposable implements IDetailImageDemo {
 		return selection;
 	}
 
-	private async streamCode(version: DemoVersion, token: CancellationToken): Promise<void> {
-		const source = (await this.fileService.readFile(URI.joinPath(this.source, 'app.js'))).value.toString();
-		const excerpt = /async function prepareImage\([\s\S]*?(?=\nfunction showImage)/.exec(source)?.[0].trimEnd();
-		const code = version === 2 && excerpt ? excerpt : source;
-		const lines = code.replace(/\r\n/g, '\n').split('\n');
-		const resource = URI.from({ scheme: Schemas.inMemory, authority: generateUuid(), path: '/app.js' });
-		const model = this.modelService.createModel('', this.languageService.createById('javascript'), resource);
-		const pane = await this.editorService.openEditor({ resource, label: 'V' + version + ' · app.js', options: { pinned: true, preserveFocus: true } });
+	private async buildV1(session: DemoSession, report: (message: string) => Promise<void>, pending: (message: string) => void, token: CancellationToken): Promise<void> {
+		pending('正在读取工作台模板…');
+		const [html, css, app] = await Promise.all(['index.html', 'styles.css', 'app.js'].map(async file =>
+			(await this.fileService.readFile(URI.joinPath(this.source, file))).value.toString().replace(/\r\n/g, '\n')));
+		const templateStart = app.indexOf('\nfunction option(') + 1;
+		const renderStart = app.indexOf('\nfunction wrapLines(') + 1;
+		if (!templateStart || renderStart <= templateStart) {
+			throw new Error('内置工作台模板缺少模板编辑或出图代码。');
+		}
+
+		await report('**开始搭建 V1**\n\n我先把商品图、选风格、排版与出图做成三个步骤，再把上传和出图操作接进去。\n\n');
+		pending('正在编写页面结构 · index.html');
+		await this.appendCode(await this.openCodeEditor(1, 'index.html', 'html'), html, 6500, token);
+
+		await report('三个步骤的页面结构已展开。现在补上桌面布局，让每张图的提示词和文案与右侧预览一一对应。\n\n');
+		pending('正在排版页面 · styles.css');
+		await this.appendCode(await this.openCodeEditor(1, 'styles.css', 'css'), css, 6500, token);
+
+		await report('**接通商品图和风格选择**\n\n接下来写上传校验、商品图预览和步骤切换。风格既可以从候选里选，也可以上传参考图。\n\n');
+		pending('正在编写上传与风格逻辑 · app.js');
+		const editor = await this.openCodeEditor(1, 'app.js', 'javascript');
+		await this.appendCode(editor, app.slice(0, templateStart), 12000, token);
+
+		await report('**接通模板和文案编辑**\n\n载入预设时设置张数和比例。点击模板优化才会填入提示词和图上文案，两项都可以继续编辑。\n\n');
+		pending('正在编写模板与逐图编辑逻辑 · app.js');
+		await this.appendCode(editor, app.slice(templateStart, renderStart), 11000, token);
+
+		await report('**接通出图和下载**\n\n把批量出图、单张重新生成和 PNG 下载接到每一行，更新单张时保留其余结果。\n\n');
+		pending('正在编写出图、下载与页面初始化逻辑 · app.js');
+		await this.appendCode(editor, app.slice(renderStart), 16000, token);
+
+		await report('代码已展开，正在将页面、素材和运行配置写入工作区。预览页初始化后就可以开始测试。\n\n');
+		pending('正在写入文件并启动 V1 预览…');
+		await this.publish(session, 1);
+	}
+
+	private async streamV2Code(token: CancellationToken): Promise<void> {
+		const app = (await this.fileService.readFile(URI.joinPath(this.source, 'app.js'))).value.toString();
+		const excerpt = /async function prepareImage\([\s\S]*?(?=\nfunction showImage)/.exec(app)?.[0].trimEnd();
+		await this.appendCode(await this.openCodeEditor(2, 'app.js', 'javascript'), excerpt ?? app, 1800, token);
+	}
+
+	private async openCodeEditor(version: DemoVersion, filename: string, language: string) {
+		const resource = URI.from({ scheme: Schemas.inMemory, authority: generateUuid(), path: '/' + filename });
+		const model = this.modelService.createModel('', this.languageService.createById(language), resource);
+		const pane = await this.editorService.openEditor({ resource, label: 'V' + version + ' · ' + filename, options: { pinned: true, preserveFocus: true } });
 		if (!pane) {
 			model.dispose();
 			throw new Error('无法打开代码编辑区。');
 		}
-		const editor = getCodeEditor(pane.getControl());
-		const chunkSize = version === 1 ? 18 : 2;
+		return { model, editor: getCodeEditor(pane.getControl()) };
+	}
+
+	private async appendCode({ model, editor }: { model: ITextModel; editor: ICodeEditor | null }, source: string, duration: number, token: CancellationToken): Promise<void> {
+		const lines = source.replace(/\r\n/g, '\n').match(/[^\n]*\n|[^\n]+$/g) ?? [];
+		const chunkSize = Math.max(1, Math.ceil(lines.length / (duration / 175)));
+		const start = performance.now();
 		for (let offset = 0; offset < lines.length; offset += chunkSize) {
 			if (token.isCancellationRequested) {
 				throw new CancellationError();
 			}
-			if (model.isDisposed()) {
-				break;
+			const end = Math.min(offset + chunkSize, lines.length);
+			if (!model.isDisposed()) {
+				model.applyEdits([{ range: model.getFullModelRange().collapseToEnd(), text: lines.slice(offset, end).join('') }]);
+				if (editor?.getModel() === model) {
+					editor.revealLineInCenter(model.getLineCount());
+				}
 			}
-			const text = lines.slice(offset, offset + chunkSize).join('\n');
-			model.applyEdits([{ range: model.getFullModelRange().collapseToEnd(), text: (offset ? '\n' : '') + text }]);
-			editor?.revealLineInCenter(model.getLineCount());
-			await timeout(version === 1 ? 90 : 150, token);
+			const next = start + duration * end / lines.length;
+			await timeout(Math.max(0, next - performance.now()), token);
 		}
 	}
 
