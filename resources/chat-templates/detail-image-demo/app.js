@@ -806,11 +806,14 @@ function bindControls() {
 
 async function start() {
   try {
-    const response = await fetch('demo.json', { cache: 'no-store' });
-    if (!response.ok) {
-      throw new Error('缺少演示配置。');
+    config = globalThis.detailImageDemoConfig;
+    if (!config) {
+      const response = await fetch('demo.json', { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error('缺少演示配置。');
+      }
+      config = await response.json();
     }
-    config = await response.json();
     if (config.demo !== 'product-detail-images' || ![1, 2].includes(config.version)) {
       throw new Error('演示配置无法识别。');
     }
@@ -831,6 +834,7 @@ async function start() {
   bindControls();
   $('studio').hidden = false;
   showStep(0, false);
+  window.dispatchEvent(new Event('detail-image-ready'));
 }
 
 window.addEventListener('pageshow', event => {

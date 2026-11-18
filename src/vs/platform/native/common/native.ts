@@ -267,7 +267,7 @@ export interface ICommonNativeHostService {
 	 * @param zipPath The URI where the zip file should be created.
 	 * @param files An array of file entries to include in the zip, each with a relative path and string contents.
 	 */
-	createZipFile(zipPath: URI, files: { path: string; contents: string }[]): Promise<void>;
+	createZipFile(zipPath: URI, files: { path: string; contents: string }[], binaryFiles?: [path: string, contents: VSBuffer][]): Promise<void>;
 
 	// Power
 	getSystemIdleState(idleThreshold: number): Promise<SystemIdleState>;

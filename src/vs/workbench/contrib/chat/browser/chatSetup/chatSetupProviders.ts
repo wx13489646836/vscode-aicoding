@@ -4,32 +4,26 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { WorkbenchActionExecutedClassification, WorkbenchActionExecutedEvent } from '../../../../../base/common/actions.js';
-import { raceTimeout, ResourceQueue, timeout } from '../../../../../base/common/async.js';
-import { VSBuffer } from '../../../../../base/common/buffer.js';
+import { raceTimeout, timeout } from '../../../../../base/common/async.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { hashAsync } from '../../../../../base/common/hash.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { Lazy } from '../../../../../base/common/lazy.js';
 import { Disposable, DisposableStore, IDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { join } from '../../../../../base/common/path.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { ContextKeyExpr, IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
-import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
+import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import product from '../../../../../platform/product/common/product.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
-import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkbenchEnvironmentService } from '../../../../services/environment/common/environmentService.js';
 import { nullExtensionDescription } from '../../../../services/extensions/common/extensions.js';
 import { CountTokensCallback, ILanguageModelToolsService, IPreparedToolInvocation, IToolData, IToolImpl, IToolInvocation, IToolResult, ToolDataSource, ToolProgress } from '../../common/tools/languageModelToolsService.js';
-import { IChatAgentImplementation, IChatAgentRequest, IChatAgentResult, IChatAgentService } from '../../common/participants/chatAgents.js';
+import { IChatAgentHistoryEntry, IChatAgentImplementation, IChatAgentRequest, IChatAgentResult, IChatAgentService } from '../../common/participants/chatAgents.js';
 import { ChatEntitlement, ChatEntitlementContext, IChatEntitlementService } from '../../../../services/chat/common/chatEntitlementService.js';
 import { ChatModel, ChatRequestModel, IChatRequestModel, IChatRequestVariableData } from '../../common/model/chatModel.js';
 import { ChatMode } from '../../common/chatModes.js';
@@ -62,7 +56,8 @@ import { IDefaultAccountService } from '../../../../../platform/defaultAccount/c
 import { IHostService } from '../../../../services/host/browser/host.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
 import { IExtensionsWorkbenchService } from '../../../extensions/common/extensions.js';
-import { IEditorService } from '../../../../services/editor/common/editorService.js';
+
+import { IDetailImageDemo } from './detailImageDemo.js';
 
 const defaultChat = {
 	extensionId: product.defaultChatAgent?.extensionId ?? '',
@@ -77,23 +72,8 @@ const ToolsAgentContextKey = ContextKeyExpr.and(
 	ContextKeyExpr.not(`previewFeaturesDisabled`) // Set by extension
 );
 
-const DETAIL_IMAGE_DEMO_FILES = [
-	'index.html', 'styles.css', 'app.js', 'start-preview.bat',
-	'assets/ring-v1/style-1.png', 'assets/ring-v1/style-2.png', 'assets/ring-v1/style-3.png',
-	'assets/ring-v1/detail-1.png', 'assets/ring-v1/detail-2.png', 'assets/ring-v1/detail-3.png',
-	'assets/ring-v1/detail-4.png', 'assets/ring-v1/detail-5.png', 'assets/ring-v1/detail-6.png',
-] as const;
-// Fingerprints of the original generated files, normalized to LF.
-const DETAIL_IMAGE_DEMO_ORIGINAL: Partial<Record<typeof DETAIL_IMAGE_DEMO_FILES[number], readonly string[]>> = {
-	'index.html': ['6df406a5c9ada33afc7194f48f30eb119eb6da1d', 'a39e407f42b2ff923d372fd6e7d40940b1956f05', 'e7d0f03f9baae9965289fb7af17dfeb347511f4b', '129788769cd3720e2a833a388cb939c72f42de20', '52e10a688209cf86d96476032e1732fe53167ac4', '9651c3e775baf5ead9099757a4760379cb4c7d49', '9e93e002462a577a13e53a3f1bdb3626084d70d9', '73b60c744e5b1527c043df69a353faad9259c63a', 'bb0b128a3044042febf680549fe812321f8cf491', 'b4ea46ef8efa141f3e4160ec18b905b72bd15b62', 'cd7aa5710633d65adeec1011dc82c7bf10a6be28', 'b12cc8228a2c64892659d20c5c0b25fc6133437a'],
-	'styles.css': ['984ad8e2b196600696e0d8c28b8d0125dcb9c17f', '6900c1de5d3ade7604e4cff0889ef90b6fa00001', '929bb50887eaeeb6d50f007cc2420ad388cadc1c', '9bda79721b4611886a9b61a3f6e5196749edab14', '8fd236d207f320115b35b1dbf958ed84b1452bc6', '4c4f39e93358bca24b6e76d2cfd94c75adb02d9d', '5b5bb0cab8ffbaa4b3e7866f7df3f35f686f46f2', 'd47dea32c497530213b133b8da7c9cb07c8fb0fb', '40e878bfd42349219d0490a6e20f433bf4065079', '8daa9e0549f8ac3756f6886783fb408fae318dc9'],
-	'app.js': ['3793eadfc43c84a257c52bb2c8604100411dc4d2', '0e098ff63a808b8f86f370da486fd56f8298be39', 'a34b7e00ef09f28eff2dff668f4e8b19611fbc5f', 'ced0676fafb09aee17b46602860d78346b3db18a', 'e81eff172acbacd53595190d7ed67141aff2ee53', '5940e4e28757bc4c25816dcd8e35343418db1b4d', '53cd5665839ecab72c6d87ce076b9a96cd2ec5ff', '47dc090dc1360fa3d4820799a15ee05e922c5a4b', '3896450410a0304f70a7ae52ef33b9d7c38afaa2', '858d7487c886f5ba5a55114b62eb1a3fb0e82938', 'd4570ef6012354020ea9df574c17d753480dd3fb', '94fb47634d83bd946598d94ae5017f1d8972a87e', '42d18d0ed9cb98628a3a43b28e2e876192fe17d4', '7c3704b9b17c6eac99924f625d74d0295821c2d5', 'd8d37a45c69913cfbb49db4e270047f7a18ecc24', '45315e1cad448b82357735b9cb68a820db75d3b5'],
-};
-
 export class SetupAgent extends Disposable implements IChatAgentImplementation {
 
-	private readonly detailImageDemoSessions = new ResourceMap<URI>();
-	private readonly detailImageDemoQueue = this._register(new ResourceQueue());
 
 	static registerDefaultAgents(instantiationService: IInstantiationService, location: ChatAgentLocation, mode: ChatModeKind, context: ChatEntitlementContext, controller: Lazy<ChatSetupController>): { agent: SetupAgent; disposable: IDisposable } {
 		return instantiationService.invokeFunction(accessor => {
@@ -223,9 +203,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		@IOutputService private readonly outputService: IOutputService,
 		@IExtensionsWorkbenchService private readonly extensionsWorkbenchService: IExtensionsWorkbenchService,
 		@ICommandService private readonly commandService: ICommandService,
-		@IFileService private readonly fileService: IFileService,
-		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
-		@IEditorService private readonly editorService: IEditorService,
+		@IDetailImageDemo private readonly detailImageDemo: IDetailImageDemo,
 	) {
 		super();
 
@@ -267,7 +245,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		}));
 	}
 
-	async invoke(request: IChatAgentRequest, progress: (parts: IChatProgress[]) => void): Promise<IChatAgentResult> {
+	async invoke(request: IChatAgentRequest, progress: (parts: IChatProgress[]) => void, _history: IChatAgentHistoryEntry[], token: CancellationToken): Promise<IChatAgentResult> {
 		return this.instantiationService.invokeFunction(async accessor /* using accessor for lazy loading */ => {
 			const chatService = accessor.get(IChatService);
 			const languageModelsService = accessor.get(ILanguageModelsService);
@@ -276,12 +254,12 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 			const languageModelToolsService = accessor.get(ILanguageModelToolsService);
 			const defaultAccountService = accessor.get(IDefaultAccountService);
 
-			return this.doInvoke(request, part => progress([part]), chatService, languageModelsService, chatWidgetService, chatAgentService, languageModelToolsService, defaultAccountService);
+			return this.doInvoke(request, part => progress([part]), token, chatService, languageModelsService, chatWidgetService, chatAgentService, languageModelToolsService, defaultAccountService);
 		});
 	}
 
-	private async doInvoke(request: IChatAgentRequest, progress: (part: IChatProgress) => void, chatService: IChatService, languageModelsService: ILanguageModelsService, chatWidgetService: IChatWidgetService, chatAgentService: IChatAgentService, languageModelToolsService: ILanguageModelToolsService, defaultAccountService: IDefaultAccountService): Promise<IChatAgentResult> {
-		if (await this.handleDetailImageDemoRequest(request, progress)) {
+	private async doInvoke(request: IChatAgentRequest, progress: (part: IChatProgress) => void, token: CancellationToken, chatService: IChatService, languageModelsService: ILanguageModelsService, chatWidgetService: IChatWidgetService, chatAgentService: IChatAgentService, languageModelToolsService: ILanguageModelToolsService, defaultAccountService: IDefaultAccountService): Promise<IChatAgentResult> {
+		if (await this.detailImageDemo.handleRequest(request, progress, token)) {
 			return {};
 		}
 
@@ -784,106 +762,6 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 		}
 
 		return {};
-	}
-
-	private async handleDetailImageDemoRequest(request: IChatAgentRequest, progress: (part: IChatProgress) => void): Promise<boolean> {
-		const start = request.message.includes('商品详情图');
-		const folder = this.workspaceContextService.getWorkspace().folders[0];
-		const demoFolder = this.detailImageDemoSessions.get(request.sessionResource);
-		const upgrade = request.message.includes('2048') && !!demoFolder && demoFolder.toString() === folder?.uri.toString();
-		if (!start && !upgrade) {
-			return false;
-		}
-
-		const report = (message: string) => progress({ kind: 'markdownContent', content: new MarkdownString(message) });
-		if (!folder || folder.uri.scheme !== 'file') {
-			report('请先打开一个本地工作区文件夹，再生成商品详情图演示。');
-			return true;
-		}
-		if (!this.workspaceTrustManagementService.isWorkspaceTrusted()) {
-			progress({ kind: 'markdownContent', content: SetupAgent.TRUST_NEEDED_MESSAGE });
-			return true;
-		}
-
-		const target = URI.joinPath(folder.uri, 'detail-image-demo');
-		try {
-			await this.detailImageDemoQueue.queueFor(target, async () => {
-				const configFile = URI.joinPath(target, 'demo.json');
-				const config = await this.fileService.exists(configFile) ? await this.fileService.readFile(configFile) : undefined;
-				const current = config ? JSON.parse(config.value.toString()) : undefined;
-				if (config && (current?.demo !== 'product-detail-images' || typeof current.id !== 'string' || (current.version !== 1 && current.version !== 2))) {
-					report('现有 detail-image-demo 配置无法识别。请打开一个新的工作区生成演示。');
-					return;
-				}
-				if (upgrade && !current && !start) {
-					report('请先发送「商品详情图」生成 V1。');
-					return;
-				}
-
-				const appRoot = (this.environmentService as IWorkbenchEnvironmentService & { appRoot: string }).appRoot;
-				const source = URI.file(join(appRoot, 'resources', 'chat-templates', 'detail-image-demo'));
-				const files = await Promise.all(DETAIL_IMAGE_DEMO_FILES.map(async name => {
-					const destination = URI.joinPath(target, name);
-					const content = await this.fileService.readFile(URI.joinPath(source, name));
-					const existing = await this.fileService.exists(destination) ? await this.fileService.readFile(destination) : undefined;
-					const original = DETAIL_IMAGE_DEMO_ORIGINAL[name];
-					const differs = !!existing && !existing.value.equals(content.value);
-					const generated = original && existing && differs ? original.includes(await hashAsync(existing.value.toString().replace(/\r\n/g, '\n'))) : !differs;
-					return { destination, content, existing, differs, generated, original };
-				}));
-				if (!current && files.some(file => file.differs)) {
-					report('detail-image-demo 中已有同名文件。请打开一个新的工作区生成演示。');
-					return;
-				}
-
-				// Update the bundled layout together so a customized project never ends up with a mix of template versions.
-				const refresh = files.every(file => !file.original || file.generated);
-				const created: URI[] = [];
-				for (const { destination, content, existing, differs, original } of files) {
-					if (!existing) {
-						await this.fileService.createFile(destination, content.value);
-						created.push(destination);
-					} else if (refresh && differs && original) {
-						await this.fileService.writeFile(destination, content.value, { etag: existing.etag, mtime: existing.mtime, atomic: { postfix: '.tmp' } });
-					}
-				}
-
-				const oldSample = URI.joinPath(target, 'silver-ring.webp');
-				if (refresh && await this.fileService.exists(oldSample)) {
-					const sample = await this.fileService.readFile(oldSample);
-					if (await hashAsync(sample.value) === '2c198b42cffa21563ceaa2059c47916cb5f7b1e9') {
-						await this.fileService.del(oldSample);
-					}
-				}
-
-				const version = upgrade || current?.version === 2 ? 2 : 1;
-				const nextConfig = VSBuffer.fromString(JSON.stringify({
-					demo: 'product-detail-images',
-					id: current?.id ?? generateUuid(),
-					version
-				}, null, '\t') + '\n');
-				if (!config) {
-					await this.fileService.createFile(configFile, nextConfig);
-					created.push(configFile);
-				} else if (current.version !== version) {
-					await this.fileService.writeFile(configFile, nextConfig, { etag: config.etag, mtime: config.mtime, atomic: { postfix: '.tmp' } });
-				}
-				this.detailImageDemoSessions.set(request.sessionResource, folder.uri);
-
-				if (created.length) {
-					progress({ kind: 'workspaceEdit', edits: created.map(newResource => ({ newResource })) });
-				}
-				const entry = URI.joinPath(target, upgrade ? 'demo.json' : 'index.html');
-				await this.editorService.openEditor({ resource: entry, options: { pinned: true, preserveFocus: true, revealIfOpened: true } });
-				report(upgrade
-					? 'V2 已就绪。刷新原预览页后，商品图和风格参考图会在进入生成流程前等比缩放到长边 2048 像素以内。之前报错的图片可以重新上传。'
-					: `商品详情图工具 V${version} 已就绪。运行 \`detail-image-demo/start-preview.bat\`，在浏览器打开 [本地预览](http://127.0.0.1:5500/)，从上传白底商品图开始。`);
-			});
-		} catch (error) {
-			this.logService.error('[detail image demo]', error);
-			report('无法准备商品详情图演示文件。请检查工作区是否可写，然后重新发送当前指令。');
-		}
-		return true;
 	}
 
 	private replaceAgentInRequestModel(requestModel: IChatRequestModel, chatAgentService: IChatAgentService): IChatRequestModel {

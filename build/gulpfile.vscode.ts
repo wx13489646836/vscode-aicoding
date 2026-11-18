@@ -419,6 +419,7 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			: undefined;
 
 		const license = gulp.src([product.licenseFileName, 'ThirdPartyNotices.txt', 'licenses/**'], { base: '.', allowEmpty: true });
+		const chatTemplates = gulp.src('resources/chat-templates/**', { base: '.' });
 
 		// TODO the API should be copied to `out` during compile, not here
 		const api = gulp.src('src/vscode-dts/vscode.d.ts').pipe(rename('out/vscode-dts/vscode.d.ts'));
@@ -464,6 +465,7 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 			packageJsonStream,
 			productJsonStream,
 			license,
+			chatTemplates,
 			api,
 			telemetry,
 			sources,

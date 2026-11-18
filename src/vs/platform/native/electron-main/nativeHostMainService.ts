@@ -1290,8 +1290,8 @@ export class NativeHostMainService extends Disposable implements INativeHostMain
 
 	//#region Zip
 
-	async createZipFile(windowId: number | undefined, zipPath: URI, files: { path: string; contents: string }[]): Promise<void> {
-		await zip(zipPath.fsPath, files);
+	async createZipFile(windowId: number | undefined, zipPath: URI, files: { path: string; contents: string }[], binaryFiles: [path: string, contents: VSBuffer][] = []): Promise<void> {
+		await zip(zipPath.fsPath, [...files, ...binaryFiles.map(([path, contents]) => ({ path, contents: Buffer.from(contents.buffer) }))]);
 	}
 
 	//#endregion
