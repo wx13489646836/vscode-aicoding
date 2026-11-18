@@ -80,9 +80,9 @@ const ToolsAgentContextKey = ContextKeyExpr.and(
 const DETAIL_IMAGE_DEMO_FILES = ['index.html', 'styles.css', 'app.js', 'start-preview.bat'] as const;
 // Fingerprints of the original generated files, normalized to LF.
 const DETAIL_IMAGE_DEMO_ORIGINAL: Partial<Record<typeof DETAIL_IMAGE_DEMO_FILES[number], readonly string[]>> = {
-	'index.html': ['6df406a5c9ada33afc7194f48f30eb119eb6da1d', 'a39e407f42b2ff923d372fd6e7d40940b1956f05', 'e7d0f03f9baae9965289fb7af17dfeb347511f4b'],
-	'styles.css': ['984ad8e2b196600696e0d8c28b8d0125dcb9c17f', '6900c1de5d3ade7604e4cff0889ef90b6fa00001', '929bb50887eaeeb6d50f007cc2420ad388cadc1c'],
-	'app.js': ['3793eadfc43c84a257c52bb2c8604100411dc4d2', '0e098ff63a808b8f86f370da486fd56f8298be39', 'a34b7e00ef09f28eff2dff668f4e8b19611fbc5f'],
+	'index.html': ['6df406a5c9ada33afc7194f48f30eb119eb6da1d', 'a39e407f42b2ff923d372fd6e7d40940b1956f05', 'e7d0f03f9baae9965289fb7af17dfeb347511f4b', '129788769cd3720e2a833a388cb939c72f42de20'],
+	'styles.css': ['984ad8e2b196600696e0d8c28b8d0125dcb9c17f', '6900c1de5d3ade7604e4cff0889ef90b6fa00001', '929bb50887eaeeb6d50f007cc2420ad388cadc1c', '9bda79721b4611886a9b61a3f6e5196749edab14'],
+	'app.js': ['3793eadfc43c84a257c52bb2c8604100411dc4d2', '0e098ff63a808b8f86f370da486fd56f8298be39', 'a34b7e00ef09f28eff2dff668f4e8b19611fbc5f', 'ced0676fafb09aee17b46602860d78346b3db18a'],
 };
 
 export class SetupAgent extends Disposable implements IChatAgentImplementation {

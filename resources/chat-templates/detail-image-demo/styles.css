@@ -25,9 +25,7 @@ h2 { font-size: clamp(1.75rem, 3.3vw, 2.45rem); margin-bottom: 1.6rem; }
 label, legend { font-size: .875rem; font-weight: 600; }
 .shell { width: min(100% - 2rem, 64rem); margin-inline: auto; }
 .masthead { background: var(--white); border-block-end: 1px solid var(--line); }
-.topbar { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; padding-block: 1.15rem; }
-.version { color: var(--muted); font-size: .8125rem; white-space: nowrap; }
-.version strong { color: var(--ink); margin-inline-start: .3rem; font-variant-numeric: tabular-nums; }
+.topbar { padding-block: 1.15rem; }
 .app-status:not(:empty) { padding-block: .65rem; }
 main { padding-block: 2rem 4rem; }
 .step-list { padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; }

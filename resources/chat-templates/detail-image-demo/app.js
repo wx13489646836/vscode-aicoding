@@ -634,7 +634,6 @@ async function start() {
     showImage(kind);
   }
   saveDraft();
-  $('version').textContent = 'V' + config.version;
   $('style-prompt').value = draft.prompt;
   $('image-count').append(...Array.from({ length: 8 }, (_, index) => option((index + 1) + ' 张', index + 1)));
   $('image-count').value = draft.count;
