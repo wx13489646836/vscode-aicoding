@@ -105,7 +105,7 @@ textarea { resize: vertical; }
 .candidates { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .75rem; align-items: start; }
 .candidates:not(:empty) { margin-top: .85rem; }
 .candidate { display: grid; gap: .4rem; width: 100%; text-align: left; padding: .4rem; font-size: .875rem; }
-.candidate :is(canvas, img) { display: block; width: 100%; max-width: 100%; min-width: 0; }
+.candidate img { display: block; width: 100%; max-width: 100%; min-width: 0; }
 .candidate[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .candidate[aria-pressed="true"] .candidate-name::after { content: " · 已选"; color: var(--accent); }
 

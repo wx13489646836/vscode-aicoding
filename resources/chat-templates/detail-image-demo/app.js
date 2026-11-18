@@ -61,7 +61,6 @@ const detailPresets = {
   wide: { name: '横版展示 · 4 张', ratio: '16:9', shots: ['wide', 'selling', 'scene', 'specs'] }
 };
 const imageTypes = ['image/png', 'image/jpeg', 'image/webp'];
-const candidateNames = ['漫射柔光', '侧向轮廓', '聚光对比'];
 const ringDemoStyles = ['珍珠灰柔光', '石墨聚光', '暖米石纹'];
 const ringDemoPalettes = ['月白背景，柔光', '黑曜石背景，聚光', '暖色背景，柔光'];
 const ringDemoDelay = 8000;
@@ -79,8 +78,6 @@ const draft = {
   productInfo: '',
   reference: null,
   source: 'prompt',
-  prompt: '',
-  candidatePrompt: '',
   selected: null,
   preset: '',
   count: 0,
@@ -201,7 +198,6 @@ function updateControls() {
   }
   $('optimize-template').disabled = busy || !canArrange || !draft.preset;
   $('product-actions').hidden = !hasProduct;
-  $('style-prompt').required = config.version !== 1;
   $('prompt-panel').hidden = draft.source !== 'prompt';
   $('reference-panel').hidden = draft.source !== 'reference';
   document.querySelector('input[name="style-source"][value="' + draft.source + '"]').checked = true;
@@ -235,20 +231,14 @@ async function upload(kind, file) {
     }
     const image = await prepareImage(file);
     if (kind === 'product') {
-      if (config.version === 1) {
-        draft.candidatePrompt = '';
-        draft.selected = null;
-        $('style-candidates').replaceChildren();
-      }
+      draft.selected = null;
+      $('style-candidates').replaceChildren();
       status('preset-status', '');
     }
     draft[kind] = image;
     clearResults();
     showImage(kind);
     status('style-status', '');
-    if (kind === 'product' && draft.candidatePrompt) {
-      await renderCandidates();
-    }
   } catch (error) {
     status(kind + '-status', error instanceof Error ? error.message : '无法读取此图片。', true);
   } finally {
@@ -409,27 +399,6 @@ async function ringDemoImages(kind, indices) {
     }))
   ]);
   return images;
-}
-
-async function renderCandidates() {
-  if (!draft.product || !draft.candidatePrompt) {
-    return;
-  }
-  const bitmap = await createImageBitmap(draft.product.blob);
-  try {
-    const backdrop = productNeedsBackdrop(bitmap);
-    const images = candidateNames.map((_, index) => {
-      const image = canvas(424, 252);
-      const context = image.getContext('2d');
-      const palette = promptPalette(draft.candidatePrompt, index);
-      drawBackground(context, image.width, image.height, palette, index);
-      drawProduct(context, bitmap, [50, 102, 28][index], 19, 300, 214, backdrop);
-      return image;
-    });
-    showCandidateCards(candidateNames, images);
-  } finally {
-    bitmap.close();
-  }
 }
 
 function option(text, value = text) {
@@ -726,7 +695,7 @@ async function generateDetails(singleIndex) {
   let bitmap;
   try {
     status(messageId, single ? '正在生成第 ' + (singleIndex + 1) + ' 张。' : '正在准备生成。');
-    const ringDemo = config.version === 1 && draft.source === 'prompt' && draft.selected === 0
+    const ringDemo = draft.source === 'prompt' && draft.selected === 0
       && draft.preset === 'standard' && draft.count === 6 && draft.ratio === '3:4';
     if (ringDemo) {
       const images = await ringDemoImages('detail', indices);
@@ -740,7 +709,7 @@ async function generateDetails(singleIndex) {
     } else {
       const palette = draft.source === 'reference'
         ? await referencePalette(draft.reference.blob)
-        : promptPalette(config.version === 1 ? ringDemoPalettes[draft.selected] : draft.candidatePrompt, draft.selected);
+        : promptPalette(ringDemoPalettes[draft.selected], draft.selected);
       bitmap = await createImageBitmap(draft.product.blob);
       const backdrop = productNeedsBackdrop(bitmap);
       for (const index of indices) {
@@ -792,31 +761,22 @@ function bindControls() {
       updateControls();
     });
   }
-  $('style-prompt').addEventListener('input', event => {
-    draft.prompt = event.target.value;
-  });
   $('style-form').addEventListener('submit', async event => {
     event.preventDefault();
-    if (busy || !draft.product || (config.version !== 1 && !draft.prompt.trim())) {
+    if (busy || !draft.product) {
       return;
     }
     busy = true;
-    draft.candidatePrompt = draft.prompt.trim();
     draft.selected = null;
     clearResults();
     updateControls();
     $('style-candidates').replaceChildren();
     try {
       status('style-status', '正在生成风格图…');
-      if (config.version === 1) {
-        const images = await ringDemoImages('style', [0, 1, 2]);
-        showCandidateCards(ringDemoStyles, images);
-      } else {
-        await renderCandidates();
-      }
+      const images = await ringDemoImages('style', [0, 1, 2]);
+      showCandidateCards(ringDemoStyles, images);
       status('style-status', '已生成三张风格图，请选用一张。');
     } catch {
-      draft.candidatePrompt = '';
       status('style-status', '无法生成风格图，请重试。', true);
     } finally {
       busy = false;
