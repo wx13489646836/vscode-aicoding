@@ -437,18 +437,12 @@ function loadPreset(value) {
   if (preset) {
     draft.count = preset.shots.length;
     draft.ratio = preset.ratio;
-    const productCopy = productCopyForShots(preset.shots);
-    draft.settings = draft.settings.map((_, index) => {
-      const kind = preset.shots[index];
-      const shot = shotTemplates[kind];
-      return { prompt: preset.contentPrompts?.[kind] ?? shot?.prompt ?? '', copy: productCopy[index] || shot?.copy || '' };
-    });
     $('image-count').value = draft.count;
     $('image-ratio').value = draft.ratio;
     clearResults();
   }
   renderImageRows();
-  status('preset-status', preset ? '已载入「' + preset.name + '」，共 ' + draft.count + ' 张。' : '');
+  status('preset-status', preset ? '已载入「' + preset.name + '」。点击「根据模板优化」填写提示词和文案。' : '');
   updateControls();
 }
 
@@ -512,7 +506,10 @@ async function optimizePreset() {
   status('preset-status', '正在分析商品图…');
   updateControls();
   try {
-    const product = await inspectProduct(draft.product.blob);
+    const [product] = await Promise.all([
+      inspectProduct(draft.product.blob),
+      new Promise(resolve => window.setTimeout(resolve, 3000))
+    ]);
     if (!product) {
       status('preset-status', '商品轮廓不够明显。请换一张主体清晰的白底图后重试。', true);
       return;
