@@ -116,6 +116,10 @@ textarea { resize: vertical; }
 }
 .batch-toolbar { align-items: end; }
 .batch-toolbar button { justify-self: end; }
+.preset-toolbar { margin-bottom: .75rem; }
+#preset-status:not(:empty) { margin: 0 0 .85rem; }
+.preset-control label { display: block; margin-bottom: .25rem; }
+.preset-control select { width: 100%; }
 .batch-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
 .batch-controls label, .detail-fields label { display: block; margin-bottom: .25rem; }
 .batch-controls select { width: 100%; }

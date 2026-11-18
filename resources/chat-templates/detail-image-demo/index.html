@@ -75,6 +75,14 @@
       <h2 id="template-title" tabindex="-1">排版与出图</h2>
       <form id="detail-form">
         <fieldset id="template-fields" aria-label="详情图设置">
+          <div class="batch-toolbar preset-toolbar">
+            <div class="preset-control">
+              <label for="detail-preset">载入预设</label>
+              <select id="detail-preset" aria-describedby="preset-status"></select>
+            </div>
+            <button id="optimize-template" type="button" disabled>根据模板优化</button>
+          </div>
+          <p id="preset-status" class="status" role="status"></p>
           <div class="batch-toolbar">
             <div class="batch-controls">
               <div>

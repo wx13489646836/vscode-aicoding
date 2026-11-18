@@ -1,6 +1,18 @@
 'use strict';
 
 const ratios = ['1:1', '3:4', '4:5', '9:16', '16:9'];
+const shotTemplates = {
+  cover: { prompt: '冷银灰背景，柔光，完整商品居中，保留主体轮廓', copy: '一眼看清整体轮廓' },
+  detail: { prompt: '月白背景，侧光，商品特写，突出边缘与表面细节', copy: '近看细节' },
+  outline: { prompt: '黑曜石背景，聚光，突出商品的轮廓与明暗层次', copy: '光影勾勒轮廓' },
+  finish: { prompt: '冷银灰背景，漫射柔光，商品完整呈现，底部留白', copy: '细节经得起近看' },
+  wide: { prompt: '月白背景，柔光，右侧完整展示商品，左侧留出文案位置', copy: '留意每一处线条' }
+};
+const detailPresets = {
+  launch: { name: '上新三图', ratio: '4:5', shots: ['cover', 'detail', 'finish'] },
+  catalog: { name: '细节四图', ratio: '3:4', shots: ['cover', 'outline', 'detail', 'finish'] },
+  banner: { name: '横版三图', ratio: '16:9', shots: ['wide', 'outline', 'detail'] }
+};
 const imageTypes = ['image/png', 'image/jpeg', 'image/webp'];
 const candidateNames = ['漫射柔光', '侧向轮廓', '聚光对比'];
 const displayFont = '"Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif';
@@ -19,6 +31,7 @@ const draft = {
   prompt: '',
   candidatePrompt: '',
   selected: null,
+  preset: '',
   count: 3,
   ratio: '3:4',
   settings: Array.from({ length: 8 }, () => ({ prompt: '', copy: '' }))
@@ -153,6 +166,7 @@ function updateControls() {
   $('style-fields').disabled = busy || !hasProduct;
   $('template-fields').disabled = busy || !canArrange;
   $('generate-button').disabled = busy || !canArrange;
+  $('optimize-template').disabled = busy || !canArrange || !draft.preset;
   $('product-actions').hidden = !hasProduct;
   $('prompt-panel').hidden = draft.source !== 'prompt';
   $('reference-panel').hidden = draft.source !== 'reference';
@@ -187,6 +201,9 @@ async function upload(kind, file) {
     }
     const image = await prepareImage(file);
     draft[kind] = image;
+    if (kind === 'product') {
+      status('preset-status', '');
+    }
     clearResults();
     showImage(kind);
     status('style-status', '');
@@ -362,6 +379,112 @@ function option(text, value = text) {
   element.value = value;
   element.textContent = text;
   return element;
+}
+
+function loadPreset(value) {
+  draft.preset = value;
+  const preset = detailPresets[value];
+  if (preset) {
+    draft.count = preset.shots.length;
+    draft.ratio = preset.ratio;
+    draft.settings = draft.settings.map((_, index) => ({ ...(shotTemplates[preset.shots[index]] ?? { prompt: '', copy: '' }) }));
+    $('image-count').value = draft.count;
+    $('image-ratio').value = draft.ratio;
+    clearResults();
+    renderImageRows();
+  }
+  status('preset-status', preset ? '已载入「' + preset.name + '」，共 ' + draft.count + ' 张。' : '');
+  saveDraft();
+  updateControls();
+}
+
+async function inspectProduct(blob) {
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const scale = 160 / Math.max(bitmap.width, bitmap.height);
+    const sample = canvas(Math.max(1, Math.round(bitmap.width * scale)), Math.max(1, Math.round(bitmap.height * scale)));
+    const { width, height } = sample;
+    const context = sample.getContext('2d', { willReadFrequently: true });
+    context.drawImage(bitmap, 0, 0, width, height);
+    const { data } = context.getImageData(0, 0, width, height);
+    let left = width, top = height, right = -1, bottom = -1;
+    let count = 0, luminance = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const offset = (y * width + x) * 4;
+        const r = data[offset], g = data[offset + 1], b = data[offset + 2];
+        if (data[offset + 3] < 96 || Math.min(r, g, b) > 233) {
+          continue;
+        }
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y);
+        luminance += .2126 * r + .7152 * g + .0722 * b;
+        count++;
+      }
+    }
+    if (count < Math.max(4, width * height * .002)) {
+      return null;
+    }
+    const ratio = (right - left + 1) / (bottom - top + 1);
+    return {
+      shape: ratio >= 1.25 ? '横向' : ratio <= .8 ? '纵向' : '紧凑',
+      dark: luminance / count < 128
+    };
+  } finally {
+    bitmap.close();
+  }
+}
+
+function adaptShot(kind, product) {
+  const shot = shotTemplates[kind];
+  const outline = product.shape === '紧凑' ? '紧凑的主体轮廓' : product.shape + '延展的主体轮廓';
+  const ground = product.dark ? '月白背景' : '冷银灰背景';
+  switch (kind) {
+    case 'detail':
+      return { prompt: ground + '，侧光，主体特写，沿' + outline + '保留边缘细节', copy: product.shape === '紧凑' ? '近看主体的边缘细节' : '沿着' + product.shape + '线条近看细节' };
+    case 'outline':
+      return { prompt: ground + '，聚光，完整呈现' + outline + '，强调明暗层次', copy: product.shape === '紧凑' ? '光影勾勒紧凑轮廓' : '光影勾勒' + product.shape + '线条' };
+    case 'finish':
+      return { prompt: ground + '，漫射柔光，保留' + outline + '，底部留白', copy: product.dark ? '浅色衬底衬出清晰轮廓' : '柔和光线下看清浅色轮廓' };
+    default:
+      return {
+        prompt: shot.prompt.replace(/^(冷银灰|月白)背景/, ground) + '，突出' + outline,
+        copy: product.shape === '紧凑' ? '清晰呈现主体轮廓' : '一眼看清' + product.shape + '轮廓'
+      };
+  }
+}
+
+async function optimizePreset() {
+  const preset = detailPresets[draft.preset];
+  if (busy || !preset || !draft.product) {
+    return;
+  }
+  busy = true;
+  status('preset-status', '正在分析商品图…');
+  updateControls();
+  try {
+    const product = await inspectProduct(draft.product.blob);
+    if (!product) {
+      status('preset-status', '商品轮廓不够明显。请换一张主体清晰的白底图后重试。', true);
+      return;
+    }
+    const optimized = Array.from({ length: draft.count }, (_, index) => adaptShot(preset.shots[index] ?? 'detail', product));
+    const changed = optimized.some((setting, index) => setting.prompt !== draft.settings[index].prompt || setting.copy !== draft.settings[index].copy);
+    if (changed) {
+      draft.settings.splice(0, optimized.length, ...optimized);
+      clearResults();
+      renderImageRows();
+      saveDraft();
+    }
+    status('preset-status', '已按商品轮廓和明暗优化 ' + draft.count + ' 张的提示词和文案。');
+  } catch {
+    status('preset-status', '无法分析商品图，请重新上传后重试。', true);
+  } finally {
+    busy = false;
+    updateControls();
+  }
 }
 
 function renderImageRows() {
@@ -591,6 +714,8 @@ function bindControls() {
       updateControls();
     }
   });
+  $('detail-preset').addEventListener('change', event => loadPreset(event.target.value));
+  $('optimize-template').addEventListener('click', () => void optimizePreset());
   $('image-count').addEventListener('change', event => {
     draft.count = Number(event.target.value);
     for (const result of results.splice(draft.count)) {
@@ -637,7 +762,8 @@ async function start() {
         const previous = saved.settings?.[index];
         return { prompt: previous?.prompt ?? defaults.prompt, copy: previous?.copy ?? defaults.copy };
       });
-      Object.assign(draft, saved, { ratio: ratios.includes(ratio) ? ratio : draft.ratio, settings });
+      const preset = Object.hasOwn(detailPresets, saved.preset) ? saved.preset : '';
+      Object.assign(draft, saved, { ratio: ratios.includes(ratio) ? ratio : draft.ratio, preset, settings });
     }
   } catch {
     status('app-status', '当前浏览器无法读取本地草稿。', true);
@@ -661,6 +787,8 @@ async function start() {
   }
   saveDraft();
   $('style-prompt').value = draft.prompt;
+  $('detail-preset').append(option('选择预设', ''), ...Object.entries(detailPresets).map(([value, preset]) => option(preset.name, value)));
+  $('detail-preset').value = draft.preset;
   $('image-count').append(...Array.from({ length: 8 }, (_, index) => option((index + 1) + ' 张', index + 1)));
   $('image-count').value = draft.count;
   $('image-ratio').append(...ratios.map(value => option(value)));
