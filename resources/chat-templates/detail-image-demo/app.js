@@ -2,16 +2,51 @@
 
 const ratios = ['1:1', '3:4', '4:5', '9:16', '16:9'];
 const shotTemplates = {
-  cover: { prompt: '冷银灰背景，柔光，完整商品居中，保留主体轮廓', copy: '一眼看清整体轮廓' },
-  detail: { prompt: '月白背景，侧光，商品特写，突出边缘与表面细节', copy: '近看细节' },
-  outline: { prompt: '黑曜石背景，聚光，突出商品的轮廓与明暗层次', copy: '光影勾勒轮廓' },
-  finish: { prompt: '冷银灰背景，漫射柔光，商品完整呈现，底部留白', copy: '细节经得起近看' },
-  wide: { prompt: '月白背景，柔光，右侧完整展示商品，左侧留出文案位置', copy: '留意每一处线条' }
+  cover: {
+    title: '商品首屏',
+    prompt: '冷银灰背景，柔光，完整商品居中，保留轮廓与原色，为商品名称留出清晰空间',
+    copy: '商品一览'
+  },
+  wide: {
+    title: '横版主视觉',
+    prompt: '冷银灰背景，柔光，商品完整置于右半区，左侧留出商品名称与简短介绍的位置',
+    copy: '商品一览'
+  },
+  selling: {
+    title: '核心卖点',
+    prompt: '黑曜石背景，聚光，完整展示商品设计特征，画面集中呈现一项已填写的卖点',
+    copy: '设计亮点',
+    matches: /卖点|特色|设计|亮点/
+  },
+  detail: {
+    title: '材质与工艺',
+    prompt: '冷银灰背景，侧光，商品特写，展示白底图可见的纹理、边缘与连接处，保留原有结构',
+    copy: '材质与工艺细节',
+    matches: /材质|工艺|表面|纹理|抛光|镶嵌|925\s*银/
+  },
+  scene: {
+    title: '佩戴与搭配',
+    prompt: '暖色背景，柔光，商品完整平铺，留出搭配建议的文字位置，以原图商品为视觉重点',
+    copy: '日常佩戴与搭配参考',
+    matches: /佩戴|搭配|场景|通勤|出游|送礼|穿搭|适用/
+  },
+  specs: {
+    title: '尺寸与规格',
+    prompt: '月白背景，漫射柔光，完整展示商品外形，底部留白放尺寸和规格文字',
+    copy: '选购前请核对尺寸与规格',
+    matches: /尺寸|规格|长度|长宽|宽度|高度|直径|围度|圈口|重量|克重|毫米|厘米|\bmm\b|\bcm\b/i
+  },
+  care: {
+    title: '保养与选购须知',
+    prompt: '月白背景，柔光，商品居中完整呈现，底部留白放保养方式、包装或选购说明',
+    copy: '选购时请核对商品信息',
+    matches: /养护|保养|保管|清洁|包装|配件|配套|套装|须知|售后|质保|发货/
+  }
 };
 const detailPresets = {
-  launch: { name: '上新三图', ratio: '4:5', shots: ['cover', 'detail', 'finish'] },
-  catalog: { name: '细节四图', ratio: '3:4', shots: ['cover', 'outline', 'detail', 'finish'] },
-  banner: { name: '横版三图', ratio: '16:9', shots: ['wide', 'outline', 'detail'] }
+  essential: { name: '精简版 · 4 张', ratio: '4:5', shots: ['cover', 'selling', 'detail', 'specs'] },
+  standard: { name: '标准版 · 6 张', ratio: '3:4', shots: ['cover', 'selling', 'detail', 'scene', 'specs', 'care'] },
+  wide: { name: '横版展示 · 4 张', ratio: '16:9', shots: ['wide', 'selling', 'scene', 'specs'] }
 };
 const imageTypes = ['image/png', 'image/jpeg', 'image/webp'];
 const candidateNames = ['漫射柔光', '侧向轮廓', '聚光对比'];
@@ -383,22 +418,27 @@ function option(text, value = text) {
   return element;
 }
 
-function productCopySource() {
+function productCopyForShots(shots) {
   const name = draft.productName.trim().replace(/\s+/g, ' ');
   const facts = [...new Set(draft.productInfo.split(/[\r\n；;。]+/)
     .map(fact => fact.trim().replace(/\s+/g, ' '))
     .filter(fact => fact && fact !== name))];
-  return { name, facts };
-}
-
-function withProductCopy(setting, index, count, { name, facts }) {
-  const description = index === count - 1 ? facts.slice(index).join(' · ') : facts[index];
-  const text = [index === 0 ? name : '', description].filter(Boolean).join(' · ');
-  if (!text) {
-    return setting;
+  const groups = shots.map(() => []);
+  if (name) {
+    groups[0].push(name);
   }
-  const copy = text.length > 120 ? text.slice(0, 119).trimEnd() + '…' : text;
-  return { ...setting, copy };
+  const general = Math.max(0, shots.indexOf('selling'));
+  for (const fact of facts) {
+    const separator = fact.search(/[:：]/);
+    const label = separator === -1 ? '' : fact.slice(0, separator);
+    const labeled = shots.findIndex(shot => shotTemplates[shot].matches?.test(label));
+    const match = labeled === -1 ? shots.findIndex(shot => shotTemplates[shot].matches?.test(fact)) : labeled;
+    groups[match === -1 ? general : match].push(fact);
+  }
+  return groups.map(items => {
+    const copy = items.join(' · ');
+    return copy.length > 120 ? copy.slice(0, 119).trimEnd() + '…' : copy;
+  });
 }
 
 function loadPreset(value) {
@@ -407,16 +447,16 @@ function loadPreset(value) {
   if (preset) {
     draft.count = preset.shots.length;
     draft.ratio = preset.ratio;
-    const productCopy = productCopySource();
+    const productCopy = productCopyForShots(preset.shots);
     draft.settings = draft.settings.map((_, index) => {
       const shot = shotTemplates[preset.shots[index]];
-      return shot ? withProductCopy({ ...shot }, index, draft.count, productCopy) : { prompt: '', copy: '' };
+      return { prompt: shot?.prompt ?? '', copy: productCopy[index] || shot?.copy || '' };
     });
     $('image-count').value = draft.count;
     $('image-ratio').value = draft.ratio;
     clearResults();
-    renderImageRows();
   }
+  renderImageRows();
   status('preset-status', preset ? '已载入「' + preset.name + '」，共 ' + draft.count + ' 张。' : '');
   saveDraft();
   updateControls();
@@ -461,23 +501,16 @@ async function inspectProduct(blob) {
   }
 }
 
-function adaptShot(kind, product) {
+function adaptShot(kind, product, copy) {
   const shot = shotTemplates[kind];
-  const outline = product.shape === '紧凑' ? '紧凑的主体轮廓' : product.shape + '延展的主体轮廓';
-  const ground = product.dark ? '月白背景' : '冷银灰背景';
-  switch (kind) {
-    case 'detail':
-      return { prompt: ground + '，侧光，主体特写，沿' + outline + '保留边缘细节', copy: product.shape === '紧凑' ? '近看主体的边缘细节' : '沿着' + product.shape + '线条近看细节' };
-    case 'outline':
-      return { prompt: ground + '，聚光，完整呈现' + outline + '，强调明暗层次', copy: product.shape === '紧凑' ? '光影勾勒紧凑轮廓' : '光影勾勒' + product.shape + '线条' };
-    case 'finish':
-      return { prompt: ground + '，漫射柔光，保留' + outline + '，底部留白', copy: product.dark ? '浅色衬底衬出清晰轮廓' : '柔和光线下看清浅色轮廓' };
-    default:
-      return {
-        prompt: shot.prompt.replace(/^(冷银灰|月白)背景/, ground) + '，突出' + outline,
-        copy: product.shape === '紧凑' ? '清晰呈现主体轮廓' : '一眼看清' + product.shape + '轮廓'
-      };
-  }
+  const outline = product.shape === '紧凑' ? '保留紧凑主体的轮廓' : '沿商品的' + product.shape + '轮廓安排留白';
+  const lead = product.dark && (kind === 'cover' || kind === 'wide')
+    ? shot.prompt.replace('冷银灰背景', '月白背景')
+    : shot.prompt;
+  const outlineCopy = (kind === 'cover' || kind === 'wide') && product.shape !== '紧凑'
+    ? '商品一览 · ' + product.shape + '轮廓'
+    : shot.copy;
+  return { prompt: lead + '，' + outline, copy: copy || outlineCopy };
 }
 
 async function optimizePreset() {
@@ -494,11 +527,9 @@ async function optimizePreset() {
       status('preset-status', '商品轮廓不够明显。请换一张主体清晰的白底图后重试。', true);
       return;
     }
-    const productCopy = productCopySource();
-    const optimized = Array.from({ length: draft.count }, (_, index) => {
-      const setting = adaptShot(preset.shots[index] ?? 'detail', product);
-      return withProductCopy(setting, index, draft.count, productCopy);
-    });
+    const shots = Array.from({ length: draft.count }, (_, index) => preset.shots[index] ?? 'detail');
+    const productCopy = productCopyForShots(shots);
+    const optimized = shots.map((kind, index) => adaptShot(kind, product, productCopy[index]));
     const changed = optimized.some((setting, index) => setting.prompt !== draft.settings[index].prompt || setting.copy !== draft.settings[index].copy);
     if (changed) {
       draft.settings.splice(0, optimized.length, ...optimized);
@@ -521,7 +552,8 @@ function renderImageRows() {
     const row = template.content.firstElementChild.cloneNode(true);
     const number = index + 1;
     const title = row.querySelector('.image-title');
-    title.textContent = '第 ' + number + ' 张';
+    const kind = detailPresets[draft.preset]?.shots[index];
+    title.textContent = '第 ' + number + ' 张' + (kind ? ' · ' + shotTemplates[kind].title : '');
     title.id = 'image-title-' + number;
     row.setAttribute('aria-labelledby', title.id);
     for (const field of row.querySelectorAll('textarea[data-field]')) {
