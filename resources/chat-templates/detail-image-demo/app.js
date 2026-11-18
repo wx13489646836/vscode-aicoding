@@ -26,6 +26,8 @@ let results = [];
 const previewUrls = {};
 const draft = {
   product: null,
+  productName: '',
+  productInfo: '',
   reference: null,
   source: 'prompt',
   prompt: '',
@@ -381,13 +383,35 @@ function option(text, value = text) {
   return element;
 }
 
+function productCopySource() {
+  const name = draft.productName.trim().replace(/\s+/g, ' ');
+  const facts = [...new Set(draft.productInfo.split(/[\r\n；;。]+/)
+    .map(fact => fact.trim().replace(/\s+/g, ' '))
+    .filter(fact => fact && fact !== name))];
+  return { name, facts };
+}
+
+function withProductCopy(setting, index, count, { name, facts }) {
+  const description = index === count - 1 ? facts.slice(index).join(' · ') : facts[index];
+  const text = [index === 0 ? name : '', description].filter(Boolean).join(' · ');
+  if (!text) {
+    return setting;
+  }
+  const copy = text.length > 120 ? text.slice(0, 119).trimEnd() + '…' : text;
+  return { ...setting, copy };
+}
+
 function loadPreset(value) {
   draft.preset = value;
   const preset = detailPresets[value];
   if (preset) {
     draft.count = preset.shots.length;
     draft.ratio = preset.ratio;
-    draft.settings = draft.settings.map((_, index) => ({ ...(shotTemplates[preset.shots[index]] ?? { prompt: '', copy: '' }) }));
+    const productCopy = productCopySource();
+    draft.settings = draft.settings.map((_, index) => {
+      const shot = shotTemplates[preset.shots[index]];
+      return shot ? withProductCopy({ ...shot }, index, draft.count, productCopy) : { prompt: '', copy: '' };
+    });
     $('image-count').value = draft.count;
     $('image-ratio').value = draft.ratio;
     clearResults();
@@ -470,7 +494,11 @@ async function optimizePreset() {
       status('preset-status', '商品轮廓不够明显。请换一张主体清晰的白底图后重试。', true);
       return;
     }
-    const optimized = Array.from({ length: draft.count }, (_, index) => adaptShot(preset.shots[index] ?? 'detail', product));
+    const productCopy = productCopySource();
+    const optimized = Array.from({ length: draft.count }, (_, index) => {
+      const setting = adaptShot(preset.shots[index] ?? 'detail', product);
+      return withProductCopy(setting, index, draft.count, productCopy);
+    });
     const changed = optimized.some((setting, index) => setting.prompt !== draft.settings[index].prompt || setting.copy !== draft.settings[index].copy);
     if (changed) {
       draft.settings.splice(0, optimized.length, ...optimized);
@@ -675,6 +703,13 @@ function bindControls() {
       void upload(kind, file);
     });
   }
+  for (const [id, key] of [['product-name', 'productName'], ['product-info', 'productInfo']]) {
+    $(id).addEventListener('input', event => {
+      draft[key] = event.target.value;
+      status('preset-status', '');
+      saveDraft();
+    });
+  }
   for (const button of document.querySelectorAll('[data-step], [data-next]')) {
     button.addEventListener('click', () => showStep(Number(button.dataset.step ?? button.dataset.next)));
   }
@@ -786,6 +821,8 @@ async function start() {
     showImage(kind);
   }
   saveDraft();
+  $('product-name').value = draft.productName;
+  $('product-info').value = draft.productInfo;
   $('style-prompt').value = draft.prompt;
   $('detail-preset').append(option('选择预设', ''), ...Object.entries(detailPresets).map(([value, preset]) => option(preset.name, value)));
   $('detail-preset').value = draft.preset;

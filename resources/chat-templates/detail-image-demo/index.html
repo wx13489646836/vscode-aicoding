@@ -24,11 +24,22 @@
     </nav>
     <section id="product" class="stage" data-panel aria-labelledby="product-title">
       <h2 id="product-title" tabindex="-1">上传商品图</h2>
-      <fieldset id="product-fields" class="upload" aria-label="商品图片">
+      <fieldset id="product-fields" class="upload" aria-label="商品图片与信息">
         <div>
           <label for="product-file">白底商品图</label>
           <input id="product-file" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="product-status">
           <p id="product-status" class="status" role="status">支持 PNG、JPEG、WebP。</p>
+          <div class="product-details">
+            <div>
+              <label for="product-name">商品名称 <span class="optional">（选填）</span></label>
+              <input id="product-name" type="text" maxlength="40" placeholder="填写商品名称">
+            </div>
+            <div>
+              <label for="product-info">商品信息 <span class="optional">（选填）</span></label>
+              <textarea id="product-info" rows="4" maxlength="400" aria-describedby="product-info-help" placeholder="可填写材质、尺寸、工艺、卖点等，一行一项"></textarea>
+              <p id="product-info-help" class="status">用于载入预设和优化详情图文案。</p>
+            </div>
+          </div>
         </div>
         <img id="product-preview" alt="已上传的商品图" hidden>
       </fieldset>
