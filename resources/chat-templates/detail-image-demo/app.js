@@ -64,7 +64,6 @@ const imageTypes = ['image/png', 'image/jpeg', 'image/webp'];
 const candidateNames = ['漫射柔光', '侧向轮廓', '聚光对比'];
 const ringDemoStyles = ['珍珠灰柔光', '石墨聚光', '暖米石纹'];
 const ringDemoPalettes = ['月白背景，柔光', '黑曜石背景，聚光', '暖色背景，柔光'];
-const ringDemoImageHash = 'a3d9922956403d9d0405512e54284445891a4d309a20d66ebf8ca8c9297d3c49';
 const ringDemoDelay = 8000;
 const displayFont = '"Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif';
 const $ = id => document.getElementById(id);
@@ -202,11 +201,7 @@ function updateControls() {
   }
   $('optimize-template').disabled = busy || !canArrange || !draft.preset;
   $('product-actions').hidden = !hasProduct;
-  const ringDemo = Boolean(draft.product?.ringDemo);
-  const prompt = $('style-prompt');
-  prompt.required = !ringDemo;
-  prompt.hidden = ringDemo;
-  document.querySelector('label[for="style-prompt"]').hidden = ringDemo;
+  $('style-prompt').required = config.version !== 1;
   $('prompt-panel').hidden = draft.source !== 'prompt';
   $('reference-panel').hidden = draft.source !== 'reference';
   document.querySelector('input[name="style-source"][value="' + draft.source + '"]').checked = true;
@@ -228,15 +223,6 @@ function clearResults() {
   }
 }
 
-async function isRingDemoImage(file) {
-  if (config.version !== 1 || file.size !== 1169363 || !globalThis.crypto?.subtle) {
-    return false;
-  }
-  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
-  const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-  return hash === ringDemoImageHash;
-}
-
 async function upload(kind, file) {
   if (!file || busy) {
     return;
@@ -249,8 +235,7 @@ async function upload(kind, file) {
     }
     const image = await prepareImage(file);
     if (kind === 'product') {
-      image.ringDemo = await isRingDemoImage(file);
-      if (draft.product?.ringDemo || image.ringDemo) {
+      if (config.version === 1) {
         draft.candidatePrompt = '';
         draft.selected = null;
         $('style-candidates').replaceChildren();
@@ -741,7 +726,7 @@ async function generateDetails(singleIndex) {
   let bitmap;
   try {
     status(messageId, single ? '正在生成第 ' + (singleIndex + 1) + ' 张。' : '正在准备生成。');
-    const ringDemo = draft.product.ringDemo && draft.source === 'prompt' && draft.selected === 0
+    const ringDemo = config.version === 1 && draft.source === 'prompt' && draft.selected === 0
       && draft.preset === 'standard' && draft.count === 6 && draft.ratio === '3:4';
     if (ringDemo) {
       const images = await ringDemoImages('detail', indices);
@@ -755,7 +740,7 @@ async function generateDetails(singleIndex) {
     } else {
       const palette = draft.source === 'reference'
         ? await referencePalette(draft.reference.blob)
-        : promptPalette(draft.product.ringDemo ? ringDemoPalettes[draft.selected] : draft.candidatePrompt, draft.selected);
+        : promptPalette(config.version === 1 ? ringDemoPalettes[draft.selected] : draft.candidatePrompt, draft.selected);
       bitmap = await createImageBitmap(draft.product.blob);
       const backdrop = productNeedsBackdrop(bitmap);
       for (const index of indices) {
@@ -812,7 +797,7 @@ function bindControls() {
   });
   $('style-form').addEventListener('submit', async event => {
     event.preventDefault();
-    if (busy || !draft.product || (!draft.product.ringDemo && !draft.prompt.trim())) {
+    if (busy || !draft.product || (config.version !== 1 && !draft.prompt.trim())) {
       return;
     }
     busy = true;
@@ -823,7 +808,7 @@ function bindControls() {
     $('style-candidates').replaceChildren();
     try {
       status('style-status', '正在生成风格图…');
-      if (draft.product.ringDemo) {
+      if (config.version === 1) {
         const images = await ringDemoImages('style', [0, 1, 2]);
         showCandidateCards(ringDemoStyles, images);
       } else {
