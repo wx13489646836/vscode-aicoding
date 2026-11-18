@@ -2,6 +2,16 @@
 
 基于 Code - OSS 定制的本地课堂演示。通过聊天生成一个商品详情图工作台，再用一次图片上传故障演示如何提出修复要求并验证结果。
 
+## Windows 安装
+
+从仓库的 Releases 下载 `VSCodeAICodingSetup.exe` 和同名的 SHA-256 校验文件。双击安装程序并选择目录。安装完成后，从桌面打开「VS Code AI Coding」，在内置聊天中输入包含「详情图」的消息。安装包包含 Code - OSS、Electron、已构建的内置扩展和详情图演示素材。用户配置和演示工作区分别保存在当前用户的应用数据目录及文档目录。
+
+构建机需具备 Windows SDK 和 Code - OSS 原生构建工具。按 `.nvmrc` 准备 Node.js 后，在仓库根目录执行 `npm ci` 安装构建依赖，再执行下列命令。生成的安装程序和校验文件位于 `dist-installer`。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\package-vscode-aicoding-installer.ps1 -AppVersion 1.115.0-aicoding.5
+```
+
 ## 运行演示
 
 1. 使用 `.nvmrc` 指定的 Node.js 版本准备依赖并构建 Code - OSS。在 Windows 上可从 `install-vscode-dev-deps.bat` 和 `start-vscode-dev.bat` 启动。

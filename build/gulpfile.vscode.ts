@@ -432,6 +432,9 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
 		const dependenciesSrc = productionDependencies.map(d => path.relative(root, d)).map(d => [`${d}/**`, `!${d}/**/{test,tests}/**`]).flat().concat('!**/*.mk');
 
 		const depFilterPattern = ['**', `!**/${config.version}/**`, '!**/bin/darwin-arm64-87/**', '!**/package-lock.json', '!**/yarn.lock'];
+		if (platform === 'win32') {
+			depFilterPattern.push('!**/prebuilds/darwin-*/**', '!**/prebuilds/linux-*/**');
+		}
 		if (stripSourceMapsInPackagingTasks) {
 			depFilterPattern.push('!**/*.{js,css}.map');
 		}
