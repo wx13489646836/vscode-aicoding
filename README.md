@@ -1,47 +1,25 @@
-# VS Code AI 编程仿真 · IP 海报页面工作流
+# VS Code AI 编程仿真 · 商品详情图生成
 
-基于 Code - OSS 源码定制的 AI 编程流程演示项目。在编辑器聊天中通过固定关键词触发 IP 页面规划、选项确认、文件生成和预览，用于展示从需求到页面工程的操作链路。仓库同时保留 VS Code 原有代码、构建结构与上游许可。
+基于 Code - OSS 定制的本地课堂演示。通过聊天生成一个商品详情图工作台，再用一次图片上传故障演示如何提出修复要求并验证结果。
 
-## 功能概览
+## 运行演示
 
-- 聊天消息中包含 ip 时进入固定规划流程，按页面定位、展示重点和生成节奏逐步选择。
-- 确认后在当前工作空间创建 vibe-demo 页面工程、样式、脚本及计划快照。
-- 内置 BrandVision 页面模板，分为素材录入、IP 选择、海报方案与终稿输出。
-- 提供后续 UI 修复及图片压缩相关的 V1/V2 演示路径和本机预览启动器。
+1. 使用 `.nvmrc` 指定的 Node.js 版本准备依赖并构建 Code - OSS。在 Windows 上可从 `install-vscode-dev-deps.bat` 和 `start-vscode-dev.bat` 启动。
+2. 在开发版 Code - OSS 中打开并信任一个本地工作区。使用未登录 Copilot 的开发配置进入内置聊天，发送「商品详情图」。
+3. 双击生成目录 `detail-image-demo` 内的 `start-preview.bat`。此步骤需要 Python 3。在浏览器打开 `http://127.0.0.1:5500/` 并保持服务窗口开启。
+4. 上传白底商品图，输入文字生成三张风格图并选择一张，或上传自定义风格参考图。设置详情图张数、每张的内容模板、文案和比例，生成后逐张下载 PNG。
 
-## 界面截图
+风格候选和详情图由浏览器本地合成，无需 API 配置。上传的素材、选定风格和模板配置保存在当前浏览器的项目草稿中。
 
-### 内置 BrandVision IP 海报模板的源码页面预览
+## 验证 V1 和 V2
 
-![内置 BrandVision IP 海报模板的源码页面预览](docs/screenshots/ip-workflow.jpg)
-
-截图展示仓库的内置输出页面模板，不是 VS Code 编辑器运行截图。当前 ip 流程为脚本化演示，并不等同于任意需求的实时 AI 编程；默认外部演示素材路径需按目标电脑核对。
-
-## 操作流程
-
-1. 运行当前检出的定制 Code - OSS 构建，并打开一个可写工作空间。
-2. 在聊天中发送含 ip 的需求，完成三轮选项。
-3. 按流程确认，检查生成的 vibe-demo 文件。
-4. 使用生成的本机预览入口查看页面，再演示后续修订。
-
-## 触发与输出
-
-触发实现位于 `src/vs/workbench/contrib/chat/browser/chatSetup/chatSetupProviders.ts`，当前检查为转成小写后包含 `ip`，因此包含该字母组合的其他文本也可能触发。未打开工作空间时不会创建目标文件。
-
-输出目录为 `vibe-demo/`，主要文件包括 `index.html`、`styles.css`、`app.js`、`README.md`、`data/plan.json` 与 `assets/asset-notes.md`。内置模板位于 `resources/chat-templates/line-art-ip-product.html`。
-
-## 环境与运行
-
-这是完整 Code - OSS 源码工程，不是可直接通过 `npm run dev` 打开的单页应用。仓库包含 `launch-vscode-aicoding.vbs`、`start-vscode-dev.bat` 和依赖准备脚本；使用前核对脚本路径、`.nvmrc` 指定的 Node.js 版本及上游构建要求。已有本机开发构建时可使用对应启动入口。
-
-固定素材默认位于 `D:/vibe-demo/fixtures/current`，预览通过 `/external-fixtures/current/manifest.json` 读取。迁移到没有该盘符的机器时，需要一起调整素材路径和生成的预览服务，不能仅复制入口脚本。
-
-## 模板与版本流程
-
-模板分四阶段：录入手绘 IP 与产品图、选择一个 IP、选择文字与构图方案、输出终稿。演示流程先创建 V1，收到指定 UI 修复与图片压缩两类请求后进入 V2，并修改同一组页面文件。准确触发词、可编辑常量及检查步骤见 [脚本化 IP 工作流说明](scripted-ip-workflow.md)。
+- 首次生成的 V1 支持长边最多 4096 像素的商品图或风格参考图。用长边超过 4096 像素的图片复现上传错误。
+- 在同一聊天中输入包含 `2048` 的修复要求，例如「上传前把所有图片等比缩放到长边 2048 像素以内」。
+- 刷新原预览页，确认版本已变为 V2。重新上传刚才报错的图片，核对处理前后的像素尺寸，再完成出图。V2 在生成前处理两种输入图片，小图保持原尺寸。
+- 每次新演示可以用一个空工作区开始。已有项目再次收到启动指令时会打开当前版本。
 
 ## 开发与上游
 
-根目录 AGENTS.md 与 `.github/copilot-instructions.md` 规定了代码修改和验证要求。修改 `src/` 下 TypeScript 后先执行对应编译检查，再进行相关测试；本次仅增加文档与截图，不修改编辑器功能源码。
+演示页面源码位于 `resources/chat-templates/detail-image-demo/`。聊天入口位于 `chatSetupProviders.ts`。修改工作台 TypeScript 后，先运行 `npm run compile-check-ts-native`。
 
-上游原 README 保存在 [README.upstream.md](README.upstream.md)，其 Code - OSS 介绍、构建资源、社区与许可链接继续保留。仓库代码许可见 [LICENSE.txt](LICENSE.txt)，并保留 [ThirdPartyNotices.txt](ThirdPartyNotices.txt)。
+[Code - OSS 上游 README](README.upstream.md) · [许可证](LICENSE.txt) · [第三方许可](ThirdPartyNotices.txt)
