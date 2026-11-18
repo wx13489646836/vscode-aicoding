@@ -86,7 +86,7 @@
                 <select id="image-ratio"></select>
               </div>
             </div>
-            <button id="generate-button" type="submit" class="primary">生成详情图</button>
+            <button id="generate-button" type="submit" class="primary">生成全部</button>
           </div>
           <p id="generate-status" class="status" role="status"></p>
           <div id="image-rows"></div>
@@ -109,13 +109,17 @@
         </div>
       </div>
       <figure class="detail-preview">
+        <div class="preview-toolbar">
+          <button type="button" class="regenerate">生成此图</button>
+          <a class="download">下载 PNG</a>
+        </div>
         <div class="preview-surface">
           <p class="preview-empty status">待生成</p>
           <img class="detail-preview-image" alt="" hidden>
         </div>
-        <figcaption hidden>
-          <span class="preview-dimensions"></span>
-          <a class="download">下载 PNG</a>
+        <figcaption>
+          <span class="preview-dimensions" hidden></span>
+          <p class="preview-message status" role="status"></p>
         </figcaption>
       </figure>
     </section>

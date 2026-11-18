@@ -169,6 +169,9 @@ function clearResults() {
   status('generate-status', '');
   for (let index = 0; index < draft.count; index++) {
     renderPreview(index);
+    if ($('preview-message-' + (index + 1))) {
+      status('preview-message-' + (index + 1), '');
+    }
   }
 }
 
@@ -383,12 +386,15 @@ function renderImageRows() {
           delete results[index];
           renderPreview(index);
         }
+        status('preview-message-' + number, '');
         status('generate-status', '');
         saveDraft();
       });
     }
     row.querySelector('figure').setAttribute('aria-label', '第 ' + number + ' 张生成结果');
     row.querySelector('img').alt = '第 ' + number + ' 张详情图';
+    row.querySelector('.preview-message').id = 'preview-message-' + number;
+    row.querySelector('.regenerate').addEventListener('click', () => void generateDetails(index));
     const download = row.querySelector('a');
     download.download = 'detail-' + String(number).padStart(2, '0') + '.png';
     download.setAttribute('aria-label', '下载第 ' + number + ' 张 PNG');
@@ -405,7 +411,11 @@ function renderPreview(index) {
   }
   const result = results[index];
   row.querySelector('.preview-empty').hidden = Boolean(result);
-  row.querySelector('figcaption').hidden = !result;
+  const dimensions = row.querySelector('.preview-dimensions');
+  dimensions.hidden = !result;
+  const button = row.querySelector('.regenerate');
+  button.textContent = result ? '重新生成' : '生成此图';
+  button.setAttribute('aria-label', button.textContent + '，第 ' + (index + 1) + ' 张');
   const preview = row.querySelector('img');
   const download = row.querySelector('a');
   preview.hidden = !result;
@@ -415,7 +425,7 @@ function renderPreview(index) {
     return;
   }
   preview.src = result.url;
-  row.querySelector('.preview-dimensions').textContent = result.width + ' × ' + result.height;
+  dimensions.textContent = result.width + ' × ' + result.height;
   download.href = result.url;
 }
 
@@ -492,32 +502,41 @@ function renderDetail(bitmap, setting, basePalette, backdrop) {
   return image;
 }
 
-async function generateDetails(event) {
-  event.preventDefault();
+async function generateDetails(singleIndex) {
   if (busy || !draft.product || !selectedStyle()) {
     return;
   }
-  clearResults();
+  const single = singleIndex !== undefined;
+  const indices = single ? [singleIndex] : Array.from({ length: draft.count }, (_, index) => index);
+  const messageId = single ? 'preview-message-' + (singleIndex + 1) : 'generate-status';
+  status('generate-status', '');
   busy = true;
   updateControls();
   let bitmap;
   try {
+    status(messageId, single ? '正在生成第 ' + (singleIndex + 1) + ' 张。' : '正在准备生成。');
     const palette = draft.source === 'reference'
       ? await referencePalette(draft.reference.blob)
       : promptPalette(draft.candidatePrompt, draft.selected);
     bitmap = await createImageBitmap(draft.product.blob);
     const backdrop = productNeedsBackdrop(bitmap);
-    for (const [index, setting] of draft.settings.slice(0, draft.count).entries()) {
-      status('generate-status', '正在生成第 ' + (index + 1) + ' 张，共 ' + draft.count + ' 张。');
-      const image = renderDetail(bitmap, setting, palette, backdrop);
+    for (const index of indices) {
+      if (!single) {
+        status(messageId, '正在生成第 ' + (index + 1) + ' 张，共 ' + draft.count + ' 张。');
+        status('preview-message-' + (index + 1), '');
+      }
+      const image = renderDetail(bitmap, draft.settings[index], palette, backdrop);
       const blob = await png(image);
+      const previous = results[index];
       results[index] = { url: URL.createObjectURL(blob), width: image.width, height: image.height };
       renderPreview(index);
+      if (previous) {
+        URL.revokeObjectURL(previous.url);
+      }
     }
-    status('generate-status', '已生成 ' + draft.count + ' 张详情图。');
+    status(messageId, single ? '第 ' + (singleIndex + 1) + ' 张已生成。' : '已生成 ' + draft.count + ' 张详情图。');
   } catch {
-    clearResults();
-    status('generate-status', '详情图生成失败，请重试。', true);
+    status(messageId, '详情图生成失败，请重试。', true);
   } finally {
     bitmap?.close();
     busy = false;
@@ -588,7 +607,10 @@ function bindControls() {
     clearResults();
     saveDraft();
   });
-  $('detail-form').addEventListener('submit', generateDetails);
+  $('detail-form').addEventListener('submit', event => {
+    event.preventDefault();
+    void generateDetails();
+  });
 }
 
 async function start() {
