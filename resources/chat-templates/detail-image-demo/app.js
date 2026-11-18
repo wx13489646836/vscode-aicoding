@@ -17,6 +17,7 @@ const $ = id => document.getElementById(id);
 let config;
 let db;
 let busy = false;
+let step = 0;
 let results = [];
 const previewUrls = {};
 const draft = {
@@ -113,16 +114,14 @@ function showImage(kind) {
   const image = draft[kind];
   const preview = $(kind + '-preview');
   preview.hidden = !image;
+  const label = document.querySelector('label[for="' + kind + '-file"]');
+  label.textContent = (image ? '更换' : '选择') + (kind === 'product' ? '白底图' : '参考图');
   if (!image) {
     preview.removeAttribute('src');
     return;
   }
   previewUrls[kind] = URL.createObjectURL(image.blob);
   preview.src = previewUrls[kind];
-  if (kind === 'product') {
-    preview.toggleAttribute('data-sample', Boolean(image.sample));
-    $('product-caption').textContent = image.sample ? '银戒示例' : '商品原图';
-  }
   const before = image.original.width + ' × ' + image.original.height;
   const after = image.width + ' × ' + image.height;
   status(kind + '-status', before === after ? '已上传 ' + after + ' 像素' : '已等比缩放 ' + before + ' → ' + after + ' 像素');
@@ -132,12 +131,39 @@ function selectedStyle() {
   return draft.source === 'prompt' ? draft.selected !== null : Boolean(draft.reference);
 }
 
+function showStep(next, focus = true) {
+  if (next === step && focus) {
+    return;
+  }
+  step = next;
+  const panels = [...document.querySelectorAll('[data-panel]')];
+  panels.forEach((panel, index) => panel.hidden = index !== step);
+  updateControls();
+  if (focus) {
+    panels[step].querySelector('h2').focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+  }
+}
+
 function updateControls() {
+  const hasProduct = Boolean(draft.product);
+  const canArrange = hasProduct && selectedStyle();
+  const available = [true, hasProduct, canArrange, results.length > 0];
+  for (const button of document.querySelectorAll('[data-step], [data-next]')) {
+    const target = Number(button.dataset.step ?? button.dataset.next);
+    button.disabled = busy || !available[target];
+    if (button.hasAttribute('data-step')) {
+      if (target === step) {
+        button.setAttribute('aria-current', 'step');
+      } else {
+        button.removeAttribute('aria-current');
+      }
+    }
+  }
   $('product-fields').disabled = busy;
-  $('style-fields').disabled = busy || !draft.product;
-  $('template-fields').disabled = busy || !draft.product || !selectedStyle();
-  $('style-locked').hidden = Boolean(draft.product);
-  $('template-locked').hidden = Boolean(draft.product && selectedStyle());
+  $('style-fields').disabled = busy || !hasProduct;
+  $('template-fields').disabled = busy || !canArrange;
+  $('product-actions').hidden = !hasProduct;
   $('prompt-panel').hidden = draft.source !== 'prompt';
   $('reference-panel').hidden = draft.source !== 'reference';
   document.querySelector('input[name="style-source"][value="' + draft.source + '"]').checked = true;
@@ -149,22 +175,23 @@ function clearResults() {
   }
   results = [];
   $('result-list').replaceChildren();
-  status('output-status', '生成后可逐张下载 PNG');
+  status('output-status', '');
+  status('generate-status', '');
+  updateControls();
 }
 
-async function upload(kind, source, sample = false) {
-  if (!source || busy) {
+async function upload(kind, file) {
+  if (!file || busy) {
     return;
   }
   busy = true;
   updateControls();
   try {
-    const file = await source;
     if (!imageTypes.includes(file.type)) {
       throw new Error('请选择 PNG、JPEG 或 WebP 格式的图片。');
     }
     const image = await prepareImage(file);
-    draft[kind] = { ...image, sample };
+    draft[kind] = image;
     clearResults();
     showImage(kind);
     status('style-status', '');
@@ -485,17 +512,18 @@ async function generateDetails(event) {
     bitmap = await createImageBitmap(draft.product.blob);
     const backdrop = productNeedsBackdrop(bitmap);
     for (const [index, setting] of draft.settings.slice(0, draft.count).entries()) {
-      status('output-status', '正在生成第 ' + (index + 1) + ' 张，共 ' + draft.count + ' 张。');
+      status('generate-status', '正在生成第 ' + (index + 1) + ' 张，共 ' + draft.count + ' 张。');
       const image = renderDetail(bitmap, setting, palette, backdrop);
       const blob = await png(image);
       results.push({ url: URL.createObjectURL(blob), title: templates[setting.template].title, width: image.width, height: image.height });
     }
     $('result-list').replaceChildren(...results.map(resultCard));
     status('output-status', '已生成 ' + results.length + ' 张详情图。');
-    $('output').scrollIntoView({ block: 'start' });
+    status('generate-status', '');
+    showStep(3);
   } catch {
     clearResults();
-    status('output-status', '详情图生成失败，请重试。', true);
+    status('generate-status', '详情图生成失败，请重试。', true);
   } finally {
     bitmap?.close();
     busy = false;
@@ -511,21 +539,8 @@ function bindControls() {
       void upload(kind, file);
     });
   }
-  $('use-sample').addEventListener('click', () => {
-    const sample = fetch('silver-ring.webp').then(async response => {
-      if (!response.ok) {
-        throw new Error('银戒示例载入失败，请重试。');
-      }
-      return new Blob([await response.arrayBuffer()], { type: 'image/webp' });
-    });
-    void upload('product', sample, true);
-  });
-  for (const suggestion of document.querySelectorAll('[data-prompt]')) {
-    suggestion.addEventListener('click', () => {
-      draft.prompt = suggestion.dataset.prompt;
-      $('style-prompt').value = draft.prompt;
-      $('style-form').requestSubmit();
-    });
+  for (const button of document.querySelectorAll('[data-step], [data-next]')) {
+    button.addEventListener('click', () => showStep(Number(button.dataset.step ?? button.dataset.next)));
   }
   for (const input of document.querySelectorAll('input[name="style-source"]')) {
     input.addEventListener('change', () => {
@@ -594,6 +609,10 @@ async function start() {
     status('app-status', '当前浏览器无法读取本地草稿。', true);
   }
 
+  if (draft.product?.sample) {
+    draft.product = null;
+  }
+
   for (const kind of ['product', 'reference']) {
     const image = draft[kind];
     if (config.version === 2 && image && Math.max(image.width, image.height) > 2048) {
@@ -608,7 +627,6 @@ async function start() {
   }
   saveDraft();
   $('version').textContent = 'V' + config.version;
-  document.body.dataset.version = config.version;
   $('style-prompt').value = draft.prompt;
   $('image-count').append(...Array.from({ length: 8 }, (_, index) => option((index + 1) + ' 张', index + 1)));
   $('image-count').value = draft.count;
@@ -620,8 +638,8 @@ async function start() {
     status('style-status', '无法恢复风格候选，请重新生成。', true);
   }
   bindControls();
-  updateControls();
   $('studio').hidden = false;
+  showStep(draft.product ? (selectedStyle() ? 2 : 1) : 0, false);
 }
 
 void start();

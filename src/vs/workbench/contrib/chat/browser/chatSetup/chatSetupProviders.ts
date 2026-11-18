@@ -77,12 +77,12 @@ const ToolsAgentContextKey = ContextKeyExpr.and(
 	ContextKeyExpr.not(`previewFeaturesDisabled`) // Set by extension
 );
 
-const DETAIL_IMAGE_DEMO_FILES = ['index.html', 'styles.css', 'app.js', 'silver-ring.webp', 'start-preview.bat'] as const;
+const DETAIL_IMAGE_DEMO_FILES = ['index.html', 'styles.css', 'app.js', 'start-preview.bat'] as const;
 // Fingerprints of the original generated files, normalized to LF.
-const DETAIL_IMAGE_DEMO_ORIGINAL: Partial<Record<typeof DETAIL_IMAGE_DEMO_FILES[number], string>> = {
-	'index.html': '6df406a5c9ada33afc7194f48f30eb119eb6da1d',
-	'styles.css': '984ad8e2b196600696e0d8c28b8d0125dcb9c17f',
-	'app.js': '3793eadfc43c84a257c52bb2c8604100411dc4d2',
+const DETAIL_IMAGE_DEMO_ORIGINAL: Partial<Record<typeof DETAIL_IMAGE_DEMO_FILES[number], readonly string[]>> = {
+	'index.html': ['6df406a5c9ada33afc7194f48f30eb119eb6da1d', 'a39e407f42b2ff923d372fd6e7d40940b1956f05'],
+	'styles.css': ['984ad8e2b196600696e0d8c28b8d0125dcb9c17f', '6900c1de5d3ade7604e4cff0889ef90b6fa00001'],
+	'app.js': ['3793eadfc43c84a257c52bb2c8604100411dc4d2', '0e098ff63a808b8f86f370da486fd56f8298be39'],
 };
 
 export class SetupAgent extends Disposable implements IChatAgentImplementation {
@@ -823,7 +823,7 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 					const existing = await this.fileService.exists(destination) ? await this.fileService.readFile(destination) : undefined;
 					const original = DETAIL_IMAGE_DEMO_ORIGINAL[name];
 					const differs = !!existing && !existing.value.equals(content.value);
-					const generated = original && existing && differs ? await hashAsync(existing.value.toString().replace(/\r\n/g, '\n')) === original : !differs;
+					const generated = original && existing && differs ? original.includes(await hashAsync(existing.value.toString().replace(/\r\n/g, '\n'))) : !differs;
 					return { destination, content, existing, differs, generated, original };
 				}));
 				if (!current && files.some(file => file.differs)) {
@@ -840,6 +840,14 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 						created.push(destination);
 					} else if (refresh && differs && original) {
 						await this.fileService.writeFile(destination, content.value, { etag: existing.etag, mtime: existing.mtime, atomic: { postfix: '.tmp' } });
+					}
+				}
+
+				const oldSample = URI.joinPath(target, 'silver-ring.webp');
+				if (refresh && await this.fileService.exists(oldSample)) {
+					const sample = await this.fileService.readFile(oldSample);
+					if (await hashAsync(sample.value) === '2c198b42cffa21563ceaa2059c47916cb5f7b1e9') {
+						await this.fileService.del(oldSample);
 					}
 				}
 
