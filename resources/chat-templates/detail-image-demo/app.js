@@ -1,13 +1,5 @@
 'use strict';
 
-const templates = {
-  overview: { title: '商品概览', layout: [0.08, 0.26, 0.84, 0.66, 0.08, 0.08, 0.84, 0.16] },
-  benefits: { title: '核心卖点', layout: [0.08, 0.08, 0.84, 0.55, 0.08, 0.69, 0.84, 0.23] },
-  detail: { title: '细节展示', layout: [0.39, 0.08, 0.53, 0.84, 0.08, 0.11, 0.27, 0.75] },
-  scene: { title: '使用场景', layout: [0.08, 0.33, 0.84, 0.59, 0.08, 0.08, 0.84, 0.22] },
-  specs: { title: '规格参数', layout: [0.08, 0.08, 0.45, 0.84, 0.57, 0.12, 0.35, 0.76] },
-  custom: { title: '自定义', layout: [0.08, 0.31, 0.84, 0.61, 0.08, 0.08, 0.84, 0.20] }
-};
 const ratios = ['1:1', '3:4', '4:5', '9:16', '16:9'];
 const imageTypes = ['image/png', 'image/jpeg', 'image/webp'];
 const candidateNames = ['漫射柔光', '侧向轮廓', '聚光对比'];
@@ -18,6 +10,7 @@ let config;
 let db;
 let busy = false;
 let step = 0;
+let activeImage = 0;
 let results = [];
 const previewUrls = {};
 const draft = {
@@ -28,11 +21,8 @@ const draft = {
   candidatePrompt: '',
   selected: null,
   count: 3,
-  settings: Array.from({ length: 8 }, (_, index) => ({
-    template: ['overview', 'benefits', 'detail'][index] ?? 'custom',
-    copy: '',
-    ratio: '3:4'
-  }))
+  ratio: '3:4',
+  settings: Array.from({ length: 8 }, () => ({ prompt: '', copy: '' }))
 };
 
 function status(id, message, error = false) {
@@ -148,7 +138,7 @@ function showStep(next, focus = true) {
 function updateControls() {
   const hasProduct = Boolean(draft.product);
   const canArrange = hasProduct && selectedStyle();
-  const available = [true, hasProduct, canArrange, results.length > 0];
+  const available = [true, hasProduct, canArrange];
   for (const button of document.querySelectorAll('[data-step], [data-next]')) {
     const target = Number(button.dataset.step ?? button.dataset.next);
     button.disabled = busy || !available[target];
@@ -163,6 +153,7 @@ function updateControls() {
   $('product-fields').disabled = busy;
   $('style-fields').disabled = busy || !hasProduct;
   $('template-fields').disabled = busy || !canArrange;
+  $('generate-button').disabled = busy || !canArrange;
   $('product-actions').hidden = !hasProduct;
   $('prompt-panel').hidden = draft.source !== 'prompt';
   $('reference-panel').hidden = draft.source !== 'reference';
@@ -171,13 +162,13 @@ function updateControls() {
 
 function clearResults() {
   for (const result of results) {
-    URL.revokeObjectURL(result.url);
+    if (result) {
+      URL.revokeObjectURL(result.url);
+    }
   }
   results = [];
-  $('result-list').replaceChildren();
-  status('output-status', '');
   status('generate-status', '');
-  updateControls();
+  renderPreview();
 }
 
 async function upload(kind, file) {
@@ -369,45 +360,49 @@ function option(text, value = text) {
   return element;
 }
 
-function labeledControl(label, id, control, className = '') {
-  const wrapper = document.createElement('div');
-  const caption = document.createElement('label');
-  caption.textContent = label;
-  caption.htmlFor = id;
-  control.id = id;
-  wrapper.className = className;
-  wrapper.append(caption, control);
-  return wrapper;
+function renderImageTabs() {
+  const buttons = draft.settings.slice(0, draft.count).map((_, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = String(index + 1);
+    button.setAttribute('aria-label', '编辑第 ' + (index + 1) + ' 张');
+    button.addEventListener('click', () => selectImage(index));
+    return button;
+  });
+  $('image-tabs').replaceChildren(...buttons);
+  selectImage(Math.min(activeImage, draft.count - 1));
 }
 
-function renderSettings() {
-  const rows = draft.settings.slice(0, draft.count).map((setting, index) => {
-    const row = document.createElement('fieldset');
-    row.className = 'image-setting';
-    const title = document.createElement('legend');
-    title.textContent = '第 ' + (index + 1) + ' 张';
-    const template = document.createElement('select');
-    template.append(...Object.entries(templates).map(([value, spec]) => option(spec.title, value)));
-    template.value = setting.template;
-    const ratio = document.createElement('select');
-    ratio.append(...ratios.map(value => option(value)));
-    ratio.value = setting.ratio;
-    const copy = document.createElement('textarea');
-    copy.maxLength = 72;
-    copy.rows = 2;
-    copy.value = setting.copy;
-    copy.placeholder = '填写要出现在图上的文字';
-    row.append(title, labeledControl('内容模板', 'template-' + index, template), labeledControl('图片比例', 'ratio-' + index, ratio), labeledControl('图上文案', 'copy-' + index, copy, 'copy'));
-    for (const [event, control, key] of [['change', template, 'template'], ['change', ratio, 'ratio'], ['input', copy, 'copy']]) {
-      control.addEventListener(event, () => {
-        setting[key] = control.value;
-        clearResults();
-        saveDraft();
-      });
-    }
-    return row;
-  });
-  $('image-settings').replaceChildren(...rows);
+function selectImage(index) {
+  activeImage = index;
+  const setting = draft.settings[index];
+  $('detail-prompt').value = setting.prompt;
+  $('detail-copy').value = setting.copy;
+  for (const [tabIndex, button] of Array.from($('image-tabs').children).entries()) {
+    button.setAttribute('aria-pressed', String(tabIndex === index));
+  }
+  renderPreview();
+}
+
+function renderPreview() {
+  const number = activeImage + 1;
+  const result = results[activeImage];
+  $('preview-title').textContent = '第 ' + number + ' 张预览';
+  $('preview-empty').hidden = Boolean(result);
+  $('preview-caption').hidden = !result;
+  const preview = $('detail-preview-image');
+  const download = $('preview-download');
+  preview.hidden = !result;
+  if (!result) {
+    preview.removeAttribute('src');
+    download.removeAttribute('href');
+    return;
+  }
+  preview.alt = '第 ' + number + ' 张详情图';
+  preview.src = result.url;
+  $('preview-dimensions').textContent = result.width + ' × ' + result.height;
+  download.href = result.url;
+  download.download = 'detail-' + String(number).padStart(2, '0') + '.png';
 }
 
 function wrapLines(context, text, width) {
@@ -427,73 +422,60 @@ function wrapLines(context, text, width) {
   });
 }
 
-function renderDetail(bitmap, setting, palette, backdrop) {
-  const [rw, rh] = setting.ratio.split(':').map(Number);
+function renderDetail(bitmap, setting, basePalette, backdrop) {
+  const [rw, rh] = draft.ratio.split(':').map(Number);
   const unit = 1600 / Math.max(rw, rh);
   const width = Math.round(rw * unit);
   const height = Math.round(rh * unit);
   const image = canvas(width, height);
   const context = image.getContext('2d');
-  const template = templates[setting.template];
-  const [px, py, pw, ph, tx, ty, tw, th] = template.layout;
-  const short = Math.min(width, height);
-  const inset = Math.max(9, short * .021);
-  const lightDirection = draft.source === 'prompt' ? draft.selected : 0;
+  const copy = setting.copy.trim().replace(/\s+/g, ' ');
+  const prompt = setting.prompt;
+  const light = /侧光|side light/i.test(prompt) ? 1
+    : /聚光|硬光|spotlight/i.test(prompt) ? 2
+    : /柔光|漫射|soft light/i.test(prompt) ? 0
+    : (draft.selected ?? 0);
+  const palette = /黑|月白|奶油|珍珠|冷银|银灰|蓝|绿|暖色|黑曜|pearl|ivory|silver|black|blue|green|warm/i.test(prompt)
+    ? promptPalette(prompt, light)
+    : basePalette;
+  const closeUp = /特写|近景|微距|close.up|macro/i.test(prompt);
+  const copyBelow = /文案放底部|下方留白|底部留白|text below/i.test(prompt);
+  const sideBySide = Boolean(copy) && rw > rh && !copyBelow;
+  const margin = closeUp ? .045 : .095;
+  const imageX = sideBySide ? .45 : margin;
+  const imageY = copy && !sideBySide && !copyBelow ? .25 : margin;
+  const imageWidth = 1 - imageX - margin;
+  const imageHeight = sideBySide || !copy ? 1 - margin * 2 : .66;
+  const inset = Math.min(width, height) * .024;
 
-  drawBackground(context, width, height, palette, lightDirection);
+  drawBackground(context, width, height, palette, light);
   context.strokeStyle = palette.ink;
-  context.globalAlpha = .25;
-  context.lineWidth = Math.max(1, short * .001);
+  context.globalAlpha = .24;
+  context.lineWidth = Math.max(1, inset * .05);
   context.strokeRect(inset, inset, width - inset * 2, height - inset * 2);
   context.globalAlpha = 1;
-  drawProduct(context, bitmap, px * width, py * height, pw * width, ph * height, backdrop);
+  drawProduct(context, bitmap, imageX * width, imageY * height, imageWidth * width, imageHeight * height, backdrop);
 
-  context.fillStyle = palette.ink;
-  context.textBaseline = 'top';
-  const font = '"Microsoft YaHei", "PingFang SC", sans-serif';
-  const textWidth = tw * width;
-  const body = setting.copy.trim().replace(/\s+/g, ' ');
-  const headingSize = Math.round(short * .059);
-  const titleX = tx * width;
-  const titleY = ty * height;
-  context.font = '600 ' + headingSize + 'px ' + displayFont;
-  context.fillText(template.title, titleX, titleY, textWidth);
-  context.globalAlpha = .55;
-  context.fillRect(titleX, titleY + headingSize * 1.2, Math.min(textWidth * .25, short * .125), context.lineWidth);
-  context.globalAlpha = 1;
-
-  if (body) {
-    const bodyTop = titleY + headingSize * 1.52;
-    let size = Math.round(short * .029);
+  if (copy) {
+    const textX = width * .085;
+    const textY = height * (sideBySide ? .21 : copyBelow ? .76 : .075);
+    const textWidth = width * (sideBySide ? .30 : .83);
+    const textHeight = height * (sideBySide ? .58 : .14);
+    let size = Math.round(Math.min(width, height) * .052);
     let lines;
+    context.fillStyle = palette.ink;
+    context.textBaseline = 'top';
     do {
-      context.font = size + 'px ' + font;
-      lines = wrapLines(context, body, textWidth);
-      if (lines.length * size * 1.25 <= ty * height + th * height - bodyTop || size <= 14) {
+      context.font = '600 ' + size + 'px ' + displayFont;
+      lines = wrapLines(context, copy, textWidth);
+      if (lines.length * size * 1.36 <= textHeight || size <= 12) {
         break;
       }
       size -= 1;
     } while (true);
-    lines.forEach((line, index) => context.fillText(line, tx * width, bodyTop + index * size * 1.25, textWidth));
+    lines.forEach((line, index) => context.fillText(line, textX, textY + index * size * 1.36, textWidth));
   }
   return image;
-}
-
-function resultCard(result, index) {
-  const figure = document.createElement('figure');
-  const image = document.createElement('img');
-  image.src = result.url;
-  image.alt = '第 ' + (index + 1) + ' 张 · ' + result.title;
-  const caption = document.createElement('figcaption');
-  const link = document.createElement('a');
-  link.className = 'download';
-  link.href = result.url;
-  link.download = 'detail-' + String(index + 1).padStart(2, '0') + '.png';
-  link.textContent = '下载 PNG';
-  link.setAttribute('aria-label', '下载第 ' + (index + 1) + ' 张 PNG');
-  caption.append(document.createTextNode(result.title + ' · ' + result.width + ' × ' + result.height), link);
-  figure.append(image, caption);
-  return figure;
 }
 
 async function generateDetails(event) {
@@ -515,12 +497,12 @@ async function generateDetails(event) {
       status('generate-status', '正在生成第 ' + (index + 1) + ' 张，共 ' + draft.count + ' 张。');
       const image = renderDetail(bitmap, setting, palette, backdrop);
       const blob = await png(image);
-      results.push({ url: URL.createObjectURL(blob), title: templates[setting.template].title, width: image.width, height: image.height });
+      results[index] = { url: URL.createObjectURL(blob), width: image.width, height: image.height };
+      if (index === activeImage) {
+        renderPreview();
+      }
     }
-    $('result-list').replaceChildren(...results.map(resultCard));
-    status('output-status', '已生成 ' + results.length + ' 张详情图。');
-    status('generate-status', '');
-    showStep(3);
+    status('generate-status', '已生成 ' + draft.count + ' 张详情图。');
   } catch {
     clearResults();
     status('generate-status', '详情图生成失败，请重试。', true);
@@ -580,10 +562,28 @@ function bindControls() {
   });
   $('image-count').addEventListener('change', event => {
     draft.count = Number(event.target.value);
-    renderSettings();
+    renderImageTabs();
     clearResults();
     saveDraft();
   });
+  $('image-ratio').addEventListener('change', event => {
+    draft.ratio = event.target.value;
+    clearResults();
+    saveDraft();
+  });
+  for (const key of ['prompt', 'copy']) {
+    $('detail-' + key).addEventListener('input', event => {
+      draft.settings[activeImage][key] = event.target.value;
+      const result = results[activeImage];
+      if (result) {
+        URL.revokeObjectURL(result.url);
+        delete results[activeImage];
+        renderPreview();
+      }
+      status('generate-status', '');
+      saveDraft();
+    });
+  }
   $('detail-form').addEventListener('submit', generateDetails);
 }
 
@@ -604,7 +604,15 @@ async function start() {
 
   try {
     db = await openDrafts();
-    Object.assign(draft, await readDraft());
+    const saved = await readDraft();
+    if (saved) {
+      const ratio = saved.ratio ?? saved.settings?.[0]?.ratio;
+      const settings = draft.settings.map((defaults, index) => {
+        const previous = saved.settings?.[index];
+        return { prompt: previous?.prompt ?? defaults.prompt, copy: previous?.copy ?? defaults.copy };
+      });
+      Object.assign(draft, saved, { ratio: ratios.includes(ratio) ? ratio : draft.ratio, settings });
+    }
   } catch {
     status('app-status', '当前浏览器无法读取本地草稿。', true);
   }
@@ -630,7 +638,9 @@ async function start() {
   $('style-prompt').value = draft.prompt;
   $('image-count').append(...Array.from({ length: 8 }, (_, index) => option((index + 1) + ' 张', index + 1)));
   $('image-count').value = draft.count;
-  renderSettings();
+  $('image-ratio').append(...ratios.map(value => option(value)));
+  $('image-ratio').value = draft.ratio;
+  renderImageTabs();
   try {
     await renderCandidates();
   } catch {

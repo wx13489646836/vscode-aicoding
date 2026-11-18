@@ -20,8 +20,7 @@
       <ol class="step-list">
         <li><button type="button" data-step="0"><span aria-hidden="true">01</span>商品图</button></li>
         <li><button type="button" data-step="1"><span aria-hidden="true">02</span>选风格</button></li>
-        <li><button type="button" data-step="2"><span aria-hidden="true">03</span>排版</button></li>
-        <li><button type="button" data-step="3"><span aria-hidden="true">04</span>下载</button></li>
+        <li><button type="button" data-step="2"><span aria-hidden="true">03</span>排版与出图</button></li>
       </ol>
     </nav>
     <section id="product" class="stage" data-panel aria-labelledby="product-title">
@@ -74,29 +73,51 @@
     </section>
 
     <section id="template" class="stage" data-panel aria-labelledby="template-title" hidden>
-      <h2 id="template-title" tabindex="-1">排版详情图</h2>
-      <form id="detail-form">
-        <fieldset id="template-fields" aria-label="详情图设置">
-          <div class="count-control">
-            <label for="image-count">图片张数</label>
-            <select id="image-count"></select>
+      <h2 id="template-title" tabindex="-1">排版与出图</h2>
+      <div class="layout-workspace">
+        <form id="detail-form">
+          <fieldset id="template-fields" aria-label="详情图设置">
+            <div class="batch-controls">
+              <div>
+                <label for="image-count">图片张数</label>
+                <select id="image-count"></select>
+              </div>
+              <div>
+                <label for="image-ratio">统一图片比例</label>
+                <select id="image-ratio"></select>
+              </div>
+            </div>
+            <div id="image-tabs" class="image-tabs" role="group" aria-label="选择要编辑和预览的图片"></div>
+            <div class="detail-fields">
+              <div>
+                <label for="detail-prompt">生图提示词</label>
+                <textarea id="detail-prompt" rows="3" maxlength="180" placeholder="例如：黑曜石背景，侧光，银饰特写"></textarea>
+              </div>
+              <div>
+                <label for="detail-copy">图上文案</label>
+                <textarea id="detail-copy" rows="3" maxlength="120" placeholder="填写实际要印在这张图上的文字"></textarea>
+              </div>
+            </div>
+            <div class="actions"><button type="button" data-next="1">上一步</button></div>
+          </fieldset>
+        </form>
+        <section class="preview-pane" aria-labelledby="preview-title">
+          <div class="preview-heading">
+            <h3 id="preview-title">第 1 张预览</h3>
+            <button id="generate-button" type="submit" form="detail-form" class="primary">生成详情图</button>
           </div>
-          <div id="image-settings" class="image-settings"></div>
           <p id="generate-status" class="status" role="status"></p>
-          <div class="actions">
-            <button type="button" data-next="1">上一步</button>
-            <button type="submit" class="primary">生成详情图</button>
-          </div>
-        </fieldset>
-      </form>
-    </section>
-
-    <section id="output" class="stage" data-panel aria-labelledby="output-title" hidden>
-      <h2 id="output-title" tabindex="-1">预览与下载</h2>
-      <p id="output-status" class="status" role="status"></p>
-      <div id="result-list" class="result-list"></div>
-      <div class="actions">
-        <button type="button" data-next="2">返回排版</button>
+          <figure class="detail-preview">
+            <div class="preview-surface">
+              <p id="preview-empty" class="status">生成后在这里预览</p>
+              <img id="detail-preview-image" alt="" hidden>
+            </div>
+            <figcaption id="preview-caption" hidden>
+              <span id="preview-dimensions"></span>
+              <a id="preview-download" class="download">下载 PNG</a>
+            </figcaption>
+          </figure>
+        </section>
       </div>
     </section>
   </main>
