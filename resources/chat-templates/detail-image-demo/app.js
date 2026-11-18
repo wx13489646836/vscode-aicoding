@@ -54,7 +54,6 @@ const displayFont = '"Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif
 const $ = id => document.getElementById(id);
 
 let config;
-let db;
 let busy = false;
 let step = 0;
 let results = [];
@@ -69,8 +68,8 @@ const draft = {
   candidatePrompt: '',
   selected: null,
   preset: '',
-  count: 3,
-  ratio: '3:4',
+  count: 0,
+  ratio: '',
   settings: Array.from({ length: 8 }, () => ({ prompt: '', copy: '' }))
 };
 
@@ -78,36 +77,6 @@ function status(id, message, error = false) {
   const element = $(id);
   element.textContent = message;
   element.toggleAttribute('data-error', error);
-}
-
-function openDrafts() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('product-detail-image-demo', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('drafts');
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function readDraft() {
-  return new Promise((resolve, reject) => {
-    const request = db.transaction('drafts').objectStore('drafts').get(config.id);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function saveDraft() {
-  if (!db) {
-    return;
-  }
-  try {
-    const transaction = db.transaction('drafts', 'readwrite');
-    transaction.onabort = () => status('app-status', '当前浏览器无法保存草稿。建议完成下载后再刷新。', true);
-    transaction.objectStore('drafts').put(draft, config.id);
-  } catch {
-    status('app-status', '当前浏览器无法保存草稿。建议完成下载后再刷新。', true);
-  }
 }
 
 function canvas(width, height) {
@@ -209,7 +178,12 @@ function updateControls() {
   $('product-fields').disabled = busy;
   $('style-fields').disabled = busy || !hasProduct;
   $('template-fields').disabled = busy || !canArrange;
-  $('generate-button').disabled = busy || !canArrange;
+  const readyToGenerate = draft.count > 0 && ratios.includes(draft.ratio);
+  $('batch-help').hidden = readyToGenerate;
+  $('generate-button').disabled = busy || !canArrange || !readyToGenerate;
+  for (const button of $('image-rows').querySelectorAll('.regenerate')) {
+    button.disabled = busy || !canArrange || !readyToGenerate;
+  }
   $('optimize-template').disabled = busy || !canArrange || !draft.preset;
   $('product-actions').hidden = !hasProduct;
   $('prompt-panel').hidden = draft.source !== 'prompt';
@@ -251,7 +225,6 @@ async function upload(kind, file) {
     clearResults();
     showImage(kind);
     status('style-status', '');
-    saveDraft();
     if (kind === 'product' && draft.candidatePrompt) {
       await renderCandidates();
     }
@@ -406,7 +379,6 @@ async function renderCandidates() {
         refreshCandidateSelection();
         clearResults();
         status('style-status', '已选用「' + name + '」风格。');
-        saveDraft();
         updateControls();
       });
       return button;
@@ -465,7 +437,6 @@ function loadPreset(value) {
   }
   renderImageRows();
   status('preset-status', preset ? '已载入「' + preset.name + '」，共 ' + draft.count + ' 张。' : '');
-  saveDraft();
   updateControls();
 }
 
@@ -542,7 +513,6 @@ async function optimizePreset() {
       draft.settings.splice(0, optimized.length, ...optimized);
       clearResults();
       renderImageRows();
-      saveDraft();
     }
     status('preset-status', '已按商品轮廓和明暗优化 ' + draft.count + ' 张的提示词和文案。');
   } catch {
@@ -578,7 +548,6 @@ function renderImageRows() {
         }
         status('preview-message-' + number, '');
         status('generate-status', '');
-        saveDraft();
       });
     }
     row.querySelector('figure').setAttribute('aria-label', '第 ' + number + ' 张生成结果');
@@ -693,7 +662,7 @@ function renderDetail(bitmap, setting, basePalette, backdrop) {
 }
 
 async function generateDetails(singleIndex) {
-  if (busy || !draft.product || !selectedStyle()) {
+  if (busy || !draft.product || !selectedStyle() || !draft.count || !ratios.includes(draft.ratio)) {
     return;
   }
   const single = singleIndex !== undefined;
@@ -750,7 +719,6 @@ function bindControls() {
         event.target.removeAttribute('aria-invalid');
       }
       status('preset-status', '');
-      saveDraft();
     });
   }
   for (const button of document.querySelectorAll('[data-step], [data-next]')) {
@@ -761,13 +729,11 @@ function bindControls() {
       draft.source = input.value;
       status('style-status', '');
       clearResults();
-      saveDraft();
       updateControls();
     });
   }
   $('style-prompt').addEventListener('input', event => {
     draft.prompt = event.target.value;
-    saveDraft();
   });
   $('style-form').addEventListener('submit', async event => {
     event.preventDefault();
@@ -788,7 +754,6 @@ function bindControls() {
       status('style-status', '无法生成风格图，请重试。', true);
     } finally {
       busy = false;
-      saveDraft();
       updateControls();
     }
   });
@@ -803,12 +768,12 @@ function bindControls() {
     }
     renderImageRows();
     status('generate-status', '');
-    saveDraft();
+    updateControls();
   });
   $('image-ratio').addEventListener('change', event => {
     draft.ratio = event.target.value;
     clearResults();
-    saveDraft();
+    updateControls();
   });
   $('detail-form').addEventListener('submit', event => {
     event.preventDefault();
@@ -831,58 +796,24 @@ async function start() {
     return;
   }
 
-  try {
-    db = await openDrafts();
-    const saved = await readDraft();
-    if (saved) {
-      const ratio = saved.ratio ?? saved.settings?.[0]?.ratio;
-      const settings = draft.settings.map((defaults, index) => {
-        const previous = saved.settings?.[index];
-        return { prompt: previous?.prompt ?? defaults.prompt, copy: previous?.copy ?? defaults.copy };
-      });
-      const preset = Object.hasOwn(detailPresets, saved.preset) ? saved.preset : '';
-      Object.assign(draft, saved, { ratio: ratios.includes(ratio) ? ratio : draft.ratio, preset, settings });
-    }
-  } catch {
-    status('app-status', '当前浏览器无法读取本地草稿。', true);
-  }
-
-  if (draft.product?.sample) {
-    draft.product = null;
-  }
-
-  for (const kind of ['product', 'reference']) {
-    const image = draft[kind];
-    if (config.version === 2 && image && Math.max(image.width, image.height) > 2048) {
-      try {
-        draft[kind] = await prepareImage(image.blob, image.original);
-      } catch {
-        draft[kind] = null;
-        status(kind + '-status', '无法处理已保存的图片，请重新上传。', true);
-      }
-    }
-    showImage(kind);
-  }
-  saveDraft();
-  $('product-name').value = draft.productName;
-  $('product-info').value = draft.productInfo;
-  $('style-prompt').value = draft.prompt;
+  showImage('product');
+  showImage('reference');
   $('detail-preset').append(option('选择预设', ''), ...Object.entries(detailPresets).map(([value, preset]) => option(preset.name, value)));
   $('detail-preset').value = draft.preset;
-  $('image-count').append(...Array.from({ length: 8 }, (_, index) => option((index + 1) + ' 张', index + 1)));
-  $('image-count').value = draft.count;
-  $('image-ratio').append(...ratios.map(value => option(value)));
+  $('image-count').append(option('选择张数', ''), ...Array.from({ length: 8 }, (_, index) => option((index + 1) + ' 张', index + 1)));
+  $('image-count').value = '';
+  $('image-ratio').append(option('选择比例', ''), ...ratios.map(value => option(value)));
   $('image-ratio').value = draft.ratio;
   renderImageRows();
-  try {
-    await renderCandidates();
-  } catch {
-    draft.selected = null;
-    status('style-status', '无法恢复风格候选，请重新生成。', true);
-  }
   bindControls();
   $('studio').hidden = false;
-  showStep(draft.product && draft.productName.trim() ? (selectedStyle() ? 2 : 1) : 0, false);
+  showStep(0, false);
 }
+
+window.addEventListener('pageshow', event => {
+  if (event.persisted) {
+    window.location.reload();
+  }
+});
 
 void start();

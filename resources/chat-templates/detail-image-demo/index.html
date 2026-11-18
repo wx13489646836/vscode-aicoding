@@ -32,12 +32,12 @@
           <div class="product-details">
             <div>
               <label for="product-name">商品名称（必填）</label>
-              <input id="product-name" type="text" maxlength="40" required aria-describedby="product-name-error" placeholder="填写商品名称">
+              <input id="product-name" type="text" autocomplete="off" maxlength="40" required aria-describedby="product-name-error" placeholder="填写商品名称">
               <p id="product-name-error" class="status" role="status"></p>
             </div>
             <div>
               <label for="product-info">商品信息 <span class="optional">（选填）</span></label>
-              <textarea id="product-info" rows="4" maxlength="400" aria-describedby="product-info-help" placeholder="可填写材质、尺寸、工艺、卖点等，一行一项"></textarea>
+              <textarea id="product-info" rows="4" autocomplete="off" maxlength="400" aria-describedby="product-info-help" placeholder="可填写材质、尺寸、工艺、卖点等，一行一项"></textarea>
               <p id="product-info-help" class="status">用于载入预设和优化详情图文案。</p>
             </div>
           </div>
@@ -58,7 +58,7 @@
           <label><input type="radio" name="style-source" value="reference">上传参考图</label>
         </fieldset>
         <div id="prompt-panel">
-          <form id="style-form">
+          <form id="style-form" autocomplete="off">
             <label for="style-prompt">风格描述</label>
             <div class="prompt-controls">
               <input id="style-prompt" type="text" maxlength="100" placeholder="例如：冷银灰背景，柔和侧光" required>
@@ -108,6 +108,7 @@
             </div>
             <button id="generate-button" type="submit" class="primary">生成全部</button>
           </div>
+          <p id="batch-help" class="status">载入预设，或手动选择张数和比例。</p>
           <p id="generate-status" class="status" role="status"></p>
           <div id="image-rows"></div>
           <div class="actions"><button type="button" data-next="1">上一步</button></div>
