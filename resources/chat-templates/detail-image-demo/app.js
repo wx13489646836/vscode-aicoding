@@ -45,7 +45,19 @@ const shotTemplates = {
 };
 const detailPresets = {
   essential: { name: '精简版 · 4 张', ratio: '4:5', shots: ['cover', 'selling', 'detail', 'specs'] },
-  standard: { name: '标准版 · 6 张', ratio: '3:4', shots: ['cover', 'selling', 'detail', 'scene', 'specs', 'care'] },
+  standard: {
+    name: '标准版 · 6 张',
+    ratio: '3:4',
+    shots: ['cover', 'selling', 'detail', 'scene', 'specs', 'care'],
+    contentPrompts: {
+      cover: '完整展示一枚商品戒指，戒圈内孔和外缘均可见，上方留出商品名称与一句介绍的位置。',
+      selling: '展示戒指正面与侧面的同款视图，对照看清细圈厚度、无镶嵌的完整圆环和圆润内缘，上方留出核心卖点的位置。',
+      detail: '放大戒圈边缘与内壁的局部特写，呈现外圈抛光面、内壁和圆角过渡，保留原戒指结构。',
+      scene: '展示一只手单戴原款戒指的效果，戒指清晰可见，旁边留出日常佩戴或叠戴建议的位置。',
+      specs: '呈现戒指正视图，以跨越内孔的双向箭头标出内径，下方留出选购前核对圈口的提示；缺少数据时只示意测量位置。',
+      care: '展示取下后的戒指、柔软擦拭布和独立收纳位置，下方留出清洁、收纳和选购注意事项。'
+    }
+  },
   wide: { name: '横版展示 · 4 张', ratio: '16:9', shots: ['wide', 'selling', 'scene', 'specs'] }
 };
 const imageTypes = ['image/png', 'image/jpeg', 'image/webp'];
@@ -428,8 +440,9 @@ function loadPreset(value) {
     draft.ratio = preset.ratio;
     const productCopy = productCopyForShots(preset.shots);
     draft.settings = draft.settings.map((_, index) => {
-      const shot = shotTemplates[preset.shots[index]];
-      return { prompt: shot?.prompt ?? '', copy: productCopy[index] || shot?.copy || '' };
+      const kind = preset.shots[index];
+      const shot = shotTemplates[kind];
+      return { prompt: preset.contentPrompts?.[kind] ?? shot?.prompt ?? '', copy: productCopy[index] || shot?.copy || '' };
     });
     $('image-count').value = draft.count;
     $('image-ratio').value = draft.ratio;
@@ -479,16 +492,16 @@ async function inspectProduct(blob) {
   }
 }
 
-function adaptShot(kind, product, copy) {
+function adaptShot(kind, product, copy, contentPrompt) {
   const shot = shotTemplates[kind];
   const outline = product.shape === '紧凑' ? '保留紧凑主体的轮廓' : '沿商品的' + product.shape + '轮廓安排留白';
-  const lead = product.dark && (kind === 'cover' || kind === 'wide')
+  const lead = contentPrompt ?? (product.dark && (kind === 'cover' || kind === 'wide')
     ? shot.prompt.replace('冷银灰背景', '月白背景')
-    : shot.prompt;
+    : shot.prompt);
   const outlineCopy = (kind === 'cover' || kind === 'wide') && product.shape !== '紧凑'
     ? '商品一览 · ' + product.shape + '轮廓'
     : shot.copy;
-  return { prompt: lead + '，' + outline, copy: copy || outlineCopy };
+  return { prompt: lead.replace(/。$/, '') + '，' + outline + '。', copy: copy || outlineCopy };
 }
 
 async function optimizePreset() {
@@ -507,7 +520,7 @@ async function optimizePreset() {
     }
     const shots = Array.from({ length: draft.count }, (_, index) => preset.shots[index] ?? 'detail');
     const productCopy = productCopyForShots(shots);
-    const optimized = shots.map((kind, index) => adaptShot(kind, product, productCopy[index]));
+    const optimized = shots.map((kind, index) => adaptShot(kind, product, productCopy[index], preset.contentPrompts?.[kind]));
     const changed = optimized.some((setting, index) => setting.prompt !== draft.settings[index].prompt || setting.copy !== draft.settings[index].copy);
     if (changed) {
       draft.settings.splice(0, optimized.length, ...optimized);
