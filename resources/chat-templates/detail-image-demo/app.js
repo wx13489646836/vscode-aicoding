@@ -171,6 +171,13 @@ function selectedStyle() {
 }
 
 function showStep(next, focus = true) {
+  if (next > 0 && !draft.productName.trim()) {
+    const name = $('product-name');
+    status('product-name-error', '请输入商品名称后继续。', true);
+    name.setAttribute('aria-invalid', 'true');
+    name.focus();
+    return;
+  }
   if (next === step && focus) {
     return;
   }
@@ -738,6 +745,10 @@ function bindControls() {
   for (const [id, key] of [['product-name', 'productName'], ['product-info', 'productInfo']]) {
     $(id).addEventListener('input', event => {
       draft[key] = event.target.value;
+      if (key === 'productName' && draft.productName.trim()) {
+        status('product-name-error', '');
+        event.target.removeAttribute('aria-invalid');
+      }
       status('preset-status', '');
       saveDraft();
     });
@@ -871,7 +882,7 @@ async function start() {
   }
   bindControls();
   $('studio').hidden = false;
-  showStep(draft.product ? (selectedStyle() ? 2 : 1) : 0, false);
+  showStep(draft.product && draft.productName.trim() ? (selectedStyle() ? 2 : 1) : 0, false);
 }
 
 void start();

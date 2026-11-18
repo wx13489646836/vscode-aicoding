@@ -31,8 +31,9 @@
           <p id="product-status" class="status" role="status">支持 PNG、JPEG、WebP。</p>
           <div class="product-details">
             <div>
-              <label for="product-name">商品名称 <span class="optional">（选填）</span></label>
-              <input id="product-name" type="text" maxlength="40" placeholder="填写商品名称">
+              <label for="product-name">商品名称（必填）</label>
+              <input id="product-name" type="text" maxlength="40" required aria-describedby="product-name-error" placeholder="填写商品名称">
+              <p id="product-name-error" class="status" role="status"></p>
             </div>
             <div>
               <label for="product-info">商品信息 <span class="optional">（选填）</span></label>
