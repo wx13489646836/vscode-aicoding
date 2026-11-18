@@ -52,24 +52,33 @@ const DETAIL_IMAGE_DEMO_ORIGINAL: Partial<Record<typeof DETAIL_IMAGE_DEMO_FILES[
 	'app.js': ['3793eadfc43c84a257c52bb2c8604100411dc4d2', '0e098ff63a808b8f86f370da486fd56f8298be39', 'a34b7e00ef09f28eff2dff668f4e8b19611fbc5f', 'ced0676fafb09aee17b46602860d78346b3db18a', 'e81eff172acbacd53595190d7ed67141aff2ee53', '5940e4e28757bc4c25816dcd8e35343418db1b4d', '53cd5665839ecab72c6d87ce076b9a96cd2ec5ff', '47dc090dc1360fa3d4820799a15ee05e922c5a4b', '3896450410a0304f70a7ae52ef33b9d7c38afaa2', '858d7487c886f5ba5a55114b62eb1a3fb0e82938', 'd4570ef6012354020ea9df574c17d753480dd3fb', '94fb47634d83bd946598d94ae5017f1d8972a87e', '42d18d0ed9cb98628a3a43b28e2e876192fe17d4', '7c3704b9b17c6eac99924f625d74d0295821c2d5', 'd8d37a45c69913cfbb49db4e270047f7a18ecc24', '45315e1cad448b82357735b9cb68a820db75d3b5', '3a51bcb38d3d31fae4e5e351ccfccb757ab1e5eb'],
 };
 
-const questions = [
+const questions: readonly { area: string; intro: string; prompt: string; options: Record<string, string> }[] = [
 	{
-		title: '第 1 轮 · 流程',
-		intro: '我会按商品图、选风格、排版出图来组织工作台。先确定演示时走哪条风格流程。',
-		prompt: '上传白底图并填写商品名称后，优先用哪种方式选择风格？',
-		options: ['文字生成风格图', '上传自定义参考图'],
+		area: '用户流程',
+		intro: '先确定 V1 要替用户完成哪一段工作，再安排页面和操作步骤。',
+		prompt: 'V1 的流程要做到哪一步？',
+		options: {
+			'从上传商品图到批量出图': '实现商品图与商品信息录入、选择风格、排版和批量出图。验收时能从一张白底商品图走到一组可预览的详情图。',
+			'从上传到单张修改和导出': '打通上传、风格、排版和批量出图，并提供单张重新生成和 PNG 下载。验收时修改一张图，其他成图保持原样。',
+		},
 	},
 	{
-		title: '第 2 轮 · 生成内容',
-		intro: '详情图会把生图提示词和图上文案分开。选好预设后，点击优化再填入这两项。',
-		prompt: '这次计划优先演示哪个详情图预设？',
-		options: ['标准版 · 6 张', '精简版 · 4 张', '横版展示 · 4 张'],
+		area: '生成内容',
+		intro: '再确定 V1 要产出哪些内容，以及哪些内容需要支持手动修改。',
+		prompt: '除了最终图片，V1 需要交付哪些生成内容？',
+		options: {
+			'每张图的生图提示词和图上文案': '为每张详情图提供独立的生图提示词和图上文案。模板优化参考商品信息生成初稿，两栏都可以继续编辑，并与对应成图并排显示。',
+			'风格候选和逐图可编辑内容': '在出图前提供多张风格候选供比较，也支持上传风格参考。为每张详情图提供可编辑的生图提示词、图上文案和成图预览。',
+		},
 	},
 	{
-		title: '第 3 轮 · 技术',
-		intro: 'V1 和 V2 都可以在 VS Code 内预览。确定技术验证的优先顺序后，我会给出实施计划。',
-		prompt: '演示时要重点验证什么？',
-		options: ['复现大图问题并验证修复', '验证离线打包和迁移'],
+		area: '技术实现',
+		intro: '最后确定 V1 的运行环境和交付形式，方便现场打开原型。',
+		prompt: 'V1 应该以什么形式交付？',
+		options: {
+			'在 VS Code 内打开的本地原型': '使用本地静态页面和内置的演示素材实现 V1，无需配置生图 API。生成后在 VS Code 编辑区直接打开可操作的预览。',
+			'VS Code 预览和可独立运行的网页': '使用本地静态页面和内置的演示素材实现 V1。除了 VS Code 预览，交付包含素材和配置的页面目录，可用浏览器直接打开。',
+		},
 	},
 ];
 
@@ -152,14 +161,16 @@ class DetailImageDemo extends Disposable implements IDetailImageDemo {
 				} catch (error) {
 					this.logService.warn('[detail image demo] Could not maximize the window', error);
 				}
-				const answers: string[] = [];
-				for (const question of questions) {
+				const requirements: string[] = [];
+				for (const [index, question] of questions.entries()) {
 					await report(question.intro + '\n\n');
-					answers.push(await this.choose(question.title, question.prompt, question.options, progress, token));
+					const title = '第 ' + (index + 1) + ' 轮 · ' + question.area;
+					const answer = await this.choose(title, question.prompt, Object.keys(question.options), progress, token);
+					requirements.push(question.options[answer]);
 				}
 				session = { target };
 				this.sessions.set(request.sessionResource, session);
-				await report(this.plan(answers));
+				await report(this.plan(requirements));
 				const decision = await this.choose('实施计划确认', '是否按上面的计划生成 V1？', ['确认执行', '暂缓执行'], progress, token);
 				if (decision !== '确认执行') {
 					await report('计划已暂缓。准备好后可回复「确认执行」。');
@@ -299,19 +310,12 @@ class DetailImageDemo extends Disposable implements IDetailImageDemo {
 		}
 	}
 
-	private plan(answers: string[]): MarkdownString {
-		const plan = new MarkdownString('**实施计划 · 商品详情图工作台**\n\n');
-		for (const [index, label] of ['流程', '生成内容', '技术'].entries()) {
-			plan.appendMarkdown('- **' + label + '记录** ').appendText(answers[index].slice(0, 500)).appendMarkdown('\n');
+	private plan(requirements: string[]): MarkdownString {
+		const plan = new MarkdownString('**V1 实施计划 · 商品详情图工作台**\n\n');
+		for (const [index, question] of questions.entries()) {
+			plan.appendMarkdown('- **' + question.area + '** ' + requirements[index] + '\n');
 		}
-		plan.appendMarkdown([
-			'',
-			'1. 生成可操作的 V1，自动打开预览。完成商品图、商品信息、风格选择、排版和出图三个步骤。',
-			'2. 验证预设选择、模板优化、批量出图、单张重生成和 PNG 下载。风格及标准版六张成图使用本地银戒演示素材。',
-			'3. 根据实测反馈修正 V1 并打开 V2。自审通过后输出可解压运行的 Windows 离线 ZIP。',
-			'',
-			'在下方选择 **确认执行** 后开始生成 V1。',
-		].join('\n'));
+		plan.appendMarkdown('\n在下方选择 **确认执行** 后，我会生成并打开 V1。');
 		return plan;
 	}
 
