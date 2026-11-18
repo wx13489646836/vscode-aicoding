@@ -73,9 +73,9 @@
 
     <section id="template" class="stage" data-panel aria-labelledby="template-title" hidden>
       <h2 id="template-title" tabindex="-1">排版与出图</h2>
-      <div class="layout-workspace">
-        <form id="detail-form">
-          <fieldset id="template-fields" aria-label="详情图设置">
+      <form id="detail-form">
+        <fieldset id="template-fields" aria-label="详情图设置">
+          <div class="batch-toolbar">
             <div class="batch-controls">
               <div>
                 <label for="image-count">图片张数</label>
@@ -86,39 +86,39 @@
                 <select id="image-ratio"></select>
               </div>
             </div>
-            <div id="image-tabs" class="image-tabs" role="group" aria-label="选择要编辑和预览的图片"></div>
-            <div class="detail-fields">
-              <div>
-                <label for="detail-prompt">生图提示词</label>
-                <textarea id="detail-prompt" rows="3" maxlength="180" placeholder="例如：黑曜石背景，侧光，银饰特写"></textarea>
-              </div>
-              <div>
-                <label for="detail-copy">图上文案</label>
-                <textarea id="detail-copy" rows="3" maxlength="120" placeholder="填写实际要印在这张图上的文字"></textarea>
-              </div>
-            </div>
-            <div class="actions"><button type="button" data-next="1">上一步</button></div>
-          </fieldset>
-        </form>
-        <section class="preview-pane" aria-labelledby="preview-title">
-          <div class="preview-heading">
-            <h3 id="preview-title">第 1 张预览</h3>
-            <button id="generate-button" type="submit" form="detail-form" class="primary">生成详情图</button>
+            <button id="generate-button" type="submit" class="primary">生成详情图</button>
           </div>
           <p id="generate-status" class="status" role="status"></p>
-          <figure class="detail-preview">
-            <div class="preview-surface">
-              <p id="preview-empty" class="status">生成后在这里预览</p>
-              <img id="detail-preview-image" alt="" hidden>
-            </div>
-            <figcaption id="preview-caption" hidden>
-              <span id="preview-dimensions"></span>
-              <a id="preview-download" class="download">下载 PNG</a>
-            </figcaption>
-          </figure>
-        </section>
-      </div>
+          <div id="image-rows"></div>
+          <div class="actions"><button type="button" data-next="1">上一步</button></div>
+        </fieldset>
+      </form>
     </section>
   </main>
+  <template id="image-row-template">
+    <section class="image-row">
+      <div class="detail-fields">
+        <h3 class="image-title"></h3>
+        <div>
+          <label>生图提示词</label>
+          <textarea data-field="prompt" rows="3" maxlength="180" placeholder="例如：黑曜石背景，侧光，银饰特写"></textarea>
+        </div>
+        <div>
+          <label>图上文案</label>
+          <textarea data-field="copy" rows="3" maxlength="120" placeholder="填写实际要印在这张图上的文字"></textarea>
+        </div>
+      </div>
+      <figure class="detail-preview">
+        <div class="preview-surface">
+          <p class="preview-empty status">待生成</p>
+          <img class="detail-preview-image" alt="" hidden>
+        </div>
+        <figcaption hidden>
+          <span class="preview-dimensions"></span>
+          <a class="download">下载 PNG</a>
+        </figcaption>
+      </figure>
+    </section>
+  </template>
 </body>
 </html>

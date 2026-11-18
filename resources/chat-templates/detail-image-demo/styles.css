@@ -107,20 +107,24 @@ textarea { resize: vertical; }
 .candidate[aria-pressed="true"] .candidate-name::after { content: " · 已选"; color: var(--accent); }
 
 #template { max-width: none; }
-.layout-workspace { display: grid; grid-template-columns: minmax(0, 21rem) minmax(0, 1fr); gap: clamp(1.15rem, 3.5vw, 2.5rem); }
+.batch-toolbar, .image-row {
+  display: grid;
+  grid-template-columns: minmax(0, 21rem) minmax(0, 1fr);
+  gap: clamp(1.15rem, 3.5vw, 2.5rem);
+}
+.batch-toolbar { align-items: end; }
+.batch-toolbar button { justify-self: end; }
 .batch-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
 .batch-controls label, .detail-fields label { display: block; margin-bottom: .25rem; }
 .batch-controls select { width: 100%; }
-.image-tabs { display: flex; flex-wrap: wrap; gap: .45rem; margin-block: 1.15rem; }
-.image-tabs button { min-width: 44px; padding: .35rem; font-variant-numeric: tabular-nums; }
-.image-tabs button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--white); }
+#image-rows { margin-top: 1.2rem; }
+.image-row { padding-block: 1.15rem; border-block-start: 1px solid var(--line); align-items: start; }
+.image-row:last-child { border-block-end: 1px solid var(--line); }
+.image-title { font-size: 1rem; }
 .detail-fields { display: grid; gap: .75rem; }
 .detail-fields textarea { display: block; }
-.preview-pane { min-width: 0; border-inline-start: 1px solid var(--line); padding-inline-start: clamp(1rem, 3vw, 2rem); }
-.preview-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; }
-.preview-heading h3 { font-size: 1rem; font-weight: 600; }
+.detail-preview { min-width: 0; border-inline-start: 1px solid var(--line); padding-inline-start: clamp(1rem, 3vw, 2rem); }
 #generate-status:not(:empty) { min-height: 1.4em; }
-.detail-preview { margin-top: .9rem; }
 .preview-surface {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -150,8 +154,9 @@ textarea { resize: vertical; }
   .step-list { gap: .6rem; }
 }
 @media (max-width: 46rem) {
-  .layout-workspace { grid-template-columns: minmax(0, 1fr); }
-  .preview-pane { border-inline-start: 0; border-block-start: 1px solid var(--line); padding: 1.15rem 0 0; }
+  .batch-toolbar, .image-row { grid-template-columns: minmax(0, 1fr); }
+  .batch-toolbar button { justify-self: start; }
+  .detail-preview { border-inline-start: 0; padding-inline-start: 0; }
 }
 @media (max-width: 32rem) {
   main { padding-top: 1rem; }

@@ -10,7 +10,6 @@ let config;
 let db;
 let busy = false;
 let step = 0;
-let activeImage = 0;
 let results = [];
 const previewUrls = {};
 const draft = {
@@ -168,7 +167,9 @@ function clearResults() {
   }
   results = [];
   status('generate-status', '');
-  renderPreview();
+  for (let index = 0; index < draft.count; index++) {
+    renderPreview(index);
+  }
 }
 
 async function upload(kind, file) {
@@ -360,49 +361,62 @@ function option(text, value = text) {
   return element;
 }
 
-function renderImageTabs() {
-  const buttons = draft.settings.slice(0, draft.count).map((_, index) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = String(index + 1);
-    button.setAttribute('aria-label', '编辑第 ' + (index + 1) + ' 张');
-    button.addEventListener('click', () => selectImage(index));
-    return button;
+function renderImageRows() {
+  const template = $('image-row-template');
+  const rows = draft.settings.slice(0, draft.count).map((setting, index) => {
+    const row = template.content.firstElementChild.cloneNode(true);
+    const number = index + 1;
+    const title = row.querySelector('.image-title');
+    title.textContent = '第 ' + number + ' 张';
+    title.id = 'image-title-' + number;
+    row.setAttribute('aria-labelledby', title.id);
+    for (const field of row.querySelectorAll('textarea[data-field]')) {
+      const key = field.dataset.field;
+      field.id = 'detail-' + key + '-' + number;
+      field.previousElementSibling.htmlFor = field.id;
+      field.value = setting[key];
+      field.addEventListener('input', () => {
+        setting[key] = field.value;
+        const result = results[index];
+        if (result) {
+          URL.revokeObjectURL(result.url);
+          delete results[index];
+          renderPreview(index);
+        }
+        status('generate-status', '');
+        saveDraft();
+      });
+    }
+    row.querySelector('figure').setAttribute('aria-label', '第 ' + number + ' 张生成结果');
+    row.querySelector('img').alt = '第 ' + number + ' 张详情图';
+    const download = row.querySelector('a');
+    download.download = 'detail-' + String(number).padStart(2, '0') + '.png';
+    download.setAttribute('aria-label', '下载第 ' + number + ' 张 PNG');
+    return row;
   });
-  $('image-tabs').replaceChildren(...buttons);
-  selectImage(Math.min(activeImage, draft.count - 1));
+  $('image-rows').replaceChildren(...rows);
+  rows.forEach((_, index) => renderPreview(index));
 }
 
-function selectImage(index) {
-  activeImage = index;
-  const setting = draft.settings[index];
-  $('detail-prompt').value = setting.prompt;
-  $('detail-copy').value = setting.copy;
-  for (const [tabIndex, button] of Array.from($('image-tabs').children).entries()) {
-    button.setAttribute('aria-pressed', String(tabIndex === index));
+function renderPreview(index) {
+  const row = $('image-rows').children[index];
+  if (!row) {
+    return;
   }
-  renderPreview();
-}
-
-function renderPreview() {
-  const number = activeImage + 1;
-  const result = results[activeImage];
-  $('preview-title').textContent = '第 ' + number + ' 张预览';
-  $('preview-empty').hidden = Boolean(result);
-  $('preview-caption').hidden = !result;
-  const preview = $('detail-preview-image');
-  const download = $('preview-download');
+  const result = results[index];
+  row.querySelector('.preview-empty').hidden = Boolean(result);
+  row.querySelector('figcaption').hidden = !result;
+  const preview = row.querySelector('img');
+  const download = row.querySelector('a');
   preview.hidden = !result;
   if (!result) {
     preview.removeAttribute('src');
     download.removeAttribute('href');
     return;
   }
-  preview.alt = '第 ' + number + ' 张详情图';
   preview.src = result.url;
-  $('preview-dimensions').textContent = result.width + ' × ' + result.height;
+  row.querySelector('.preview-dimensions').textContent = result.width + ' × ' + result.height;
   download.href = result.url;
-  download.download = 'detail-' + String(number).padStart(2, '0') + '.png';
 }
 
 function wrapLines(context, text, width) {
@@ -498,9 +512,7 @@ async function generateDetails(event) {
       const image = renderDetail(bitmap, setting, palette, backdrop);
       const blob = await png(image);
       results[index] = { url: URL.createObjectURL(blob), width: image.width, height: image.height };
-      if (index === activeImage) {
-        renderPreview();
-      }
+      renderPreview(index);
     }
     status('generate-status', '已生成 ' + draft.count + ' 张详情图。');
   } catch {
@@ -562,8 +574,13 @@ function bindControls() {
   });
   $('image-count').addEventListener('change', event => {
     draft.count = Number(event.target.value);
-    renderImageTabs();
-    clearResults();
+    for (const result of results.splice(draft.count)) {
+      if (result) {
+        URL.revokeObjectURL(result.url);
+      }
+    }
+    renderImageRows();
+    status('generate-status', '');
     saveDraft();
   });
   $('image-ratio').addEventListener('change', event => {
@@ -571,19 +588,6 @@ function bindControls() {
     clearResults();
     saveDraft();
   });
-  for (const key of ['prompt', 'copy']) {
-    $('detail-' + key).addEventListener('input', event => {
-      draft.settings[activeImage][key] = event.target.value;
-      const result = results[activeImage];
-      if (result) {
-        URL.revokeObjectURL(result.url);
-        delete results[activeImage];
-        renderPreview();
-      }
-      status('generate-status', '');
-      saveDraft();
-    });
-  }
   $('detail-form').addEventListener('submit', generateDetails);
 }
 
@@ -639,7 +643,7 @@ async function start() {
   $('image-count').value = draft.count;
   $('image-ratio').append(...ratios.map(value => option(value)));
   $('image-ratio').value = draft.ratio;
-  renderImageTabs();
+  renderImageRows();
   try {
     await renderCandidates();
   } catch {
