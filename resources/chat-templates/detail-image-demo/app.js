@@ -10,7 +10,8 @@ const templates = {
 };
 const ratios = ['1:1', '3:4', '4:5', '9:16', '16:9'];
 const imageTypes = ['image/png', 'image/jpeg', 'image/webp'];
-const candidateNames = ['柔光', '清透', '对比'];
+const candidateNames = ['漫射柔光', '侧向轮廓', '聚光对比'];
+const displayFont = '"Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif';
 const $ = id => document.getElementById(id);
 
 let config;
@@ -118,6 +119,10 @@ function showImage(kind) {
   }
   previewUrls[kind] = URL.createObjectURL(image.blob);
   preview.src = previewUrls[kind];
+  if (kind === 'product') {
+    preview.toggleAttribute('data-sample', Boolean(image.sample));
+    $('product-caption').textContent = image.sample ? '银戒示例' : '商品原图';
+  }
   const before = image.original.width + ' × ' + image.original.height;
   const after = image.width + ' × ' + image.height;
   status(kind + '-status', before === after ? '已上传 ' + after + ' 像素' : '已等比缩放 ' + before + ' → ' + after + ' 像素');
@@ -144,23 +149,22 @@ function clearResults() {
   }
   results = [];
   $('result-list').replaceChildren();
-  status('output-status', '完成设置后，生成的详情图会显示在这里。');
+  status('output-status', '生成后可逐张下载 PNG');
 }
 
-async function upload(kind, input) {
-  const file = input.files[0];
-  if (!file || busy) {
+async function upload(kind, source, sample = false) {
+  if (!source || busy) {
     return;
   }
-  input.value = '';
   busy = true;
   updateControls();
   try {
+    const file = await source;
     if (!imageTypes.includes(file.type)) {
       throw new Error('请选择 PNG、JPEG 或 WebP 格式的图片。');
     }
     const image = await prepareImage(file);
-    draft[kind] = image;
+    draft[kind] = { ...image, sample };
     clearResults();
     showImage(kind);
     status('style-status', '');
@@ -190,12 +194,33 @@ function promptHue(prompt) {
 }
 
 function promptPalette(prompt, index) {
+  if (/黑曜|黑底|深色|黑色|obsidian|dark|black/i.test(prompt)) {
+    return {
+      light: ['#45484f', '#343b44', '#45464b'][index],
+      deep: ['#15171a', '#111518', '#0e1012'][index],
+      ink: '#f5f3ed'
+    };
+  }
+  if (/月白|珍珠|奶油|柔白|pearl|ivory/i.test(prompt)) {
+    return {
+      light: ['#fcfaf4', '#f6f5ef', '#eeeae4'][index],
+      deep: ['#e7e1d6', '#dcdcd6', '#cccbc8'][index],
+      ink: '#282725'
+    };
+  }
+  if (/银灰|冷银|金属|银饰|银戒|silver|metallic/i.test(prompt)) {
+    return {
+      light: ['#f0f2f3', '#e3e8eb', '#d0d6db'][index],
+      deep: ['#ccd0d3', '#b0bbc4', '#9aa5af'][index],
+      ink: '#222a30'
+    };
+  }
   const hue = promptHue(prompt);
   const shift = (hue + [0, 18, 342][index]) % 360;
   return {
-    light: 'hsl(' + shift + ' 37% ' + [93, 96, 86][index] + '%)',
-    deep: 'hsl(' + shift + ' 35% ' + [83, 89, 71][index] + '%)',
-    ink: 'hsl(' + shift + ' 39% 20%)'
+    light: 'hsl(' + shift + ' 23% ' + [96, 93, 87][index] + '%)',
+    deep: 'hsl(' + shift + ' 20% ' + [86, 79, 68][index] + '%)',
+    ink: 'hsl(' + shift + ' 17% 15%)'
   };
 }
 
@@ -233,12 +258,38 @@ function drawContained(context, bitmap, x, y, width, height) {
   context.drawImage(bitmap, x + (width - naturalWidth) / 2, y + (height - naturalHeight) / 2, naturalWidth, naturalHeight);
 }
 
-function drawBackground(context, width, height, palette) {
-  const gradient = context.createLinearGradient(0, 0, width, height);
+function drawBackground(context, width, height, palette, lightDirection = 0) {
+  const spot = width * [.42, .68, .34][lightDirection];
+  const spread = Math.max(width, height) * [.8, .82, .58][lightDirection];
+  const gradient = context.createRadialGradient(spot, height * .35, 0, spot, height * .35, spread);
   gradient.addColorStop(0, palette.light);
   gradient.addColorStop(1, palette.deep);
   context.fillStyle = gradient;
   context.fillRect(0, 0, width, height);
+}
+
+function productNeedsBackdrop(bitmap) {
+  const sample = canvas(2, 2).getContext('2d');
+  sample.drawImage(bitmap, 0, 0, 2, 2);
+  const pixels = sample.getImageData(0, 0, 2, 2).data;
+  return [3, 7, 11, 15].every(index => pixels[index] > 245);
+}
+
+function drawProduct(context, bitmap, x, y, width, height, backdrop) {
+  const inset = Math.min(width, height) * .055;
+  context.save();
+  if (backdrop) {
+    context.fillStyle = '#faf9f6';
+    context.fillRect(x, y, width, height);
+    context.strokeStyle = '#2222221e';
+    context.strokeRect(x + .5, y + .5, width - 1, height - 1);
+  } else {
+    context.shadowColor = '#141a2260';
+    context.shadowBlur = inset;
+    context.shadowOffsetY = inset * .72;
+  }
+  drawContained(context, bitmap, x + inset, y + inset, width - inset * 2, height - inset * 2);
+  context.restore();
 }
 
 function refreshCandidateSelection() {
@@ -253,6 +304,7 @@ async function renderCandidates() {
   }
   const bitmap = await createImageBitmap(draft.product.blob);
   try {
+    const backdrop = productNeedsBackdrop(bitmap);
     const cards = candidateNames.map((name, index) => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -260,11 +312,12 @@ async function renderCandidates() {
       const image = canvas(424, 252);
       const context = image.getContext('2d');
       const palette = promptPalette(draft.candidatePrompt, index);
-      drawBackground(context, image.width, image.height, palette);
-      context.fillStyle = '#fff';
-      context.fillRect(34 + index * 18, 21, 356 - index * 36, 210);
-      drawContained(context, bitmap, 52 + index * 18, 37, 320 - index * 36, 178);
-      button.append(image, document.createTextNode(name));
+      drawBackground(context, image.width, image.height, palette, index);
+      drawProduct(context, bitmap, [50, 102, 28][index], 19, 300, 214, backdrop);
+      const caption = document.createElement('span');
+      caption.className = 'candidate-name';
+      caption.textContent = name;
+      button.append(image, caption);
       button.addEventListener('click', () => {
         draft.selected = index;
         refreshCandidateSelection();
@@ -347,7 +400,7 @@ function wrapLines(context, text, width) {
   });
 }
 
-function renderDetail(bitmap, setting, palette) {
+function renderDetail(bitmap, setting, palette, backdrop) {
   const [rw, rh] = setting.ratio.split(':').map(Number);
   const unit = 1600 / Math.max(rw, rh);
   const width = Math.round(rw * unit);
@@ -357,27 +410,34 @@ function renderDetail(bitmap, setting, palette) {
   const template = templates[setting.template];
   const [px, py, pw, ph, tx, ty, tw, th] = template.layout;
   const short = Math.min(width, height);
-  const inset = short * .037;
+  const inset = Math.max(9, short * .021);
+  const lightDirection = draft.source === 'prompt' ? draft.selected : 0;
 
-  drawBackground(context, width, height, palette);
-  context.fillStyle = '#fff';
-  context.beginPath();
-  context.roundRect(px * width, py * height, pw * width, ph * height, short * .018);
-  context.fill();
-  drawContained(context, bitmap, px * width + inset, py * height + inset, pw * width - inset * 2, ph * height - inset * 2);
+  drawBackground(context, width, height, palette, lightDirection);
+  context.strokeStyle = palette.ink;
+  context.globalAlpha = .25;
+  context.lineWidth = Math.max(1, short * .001);
+  context.strokeRect(inset, inset, width - inset * 2, height - inset * 2);
+  context.globalAlpha = 1;
+  drawProduct(context, bitmap, px * width, py * height, pw * width, ph * height, backdrop);
 
   context.fillStyle = palette.ink;
   context.textBaseline = 'top';
   const font = '"Microsoft YaHei", "PingFang SC", sans-serif';
   const textWidth = tw * width;
   const body = setting.copy.trim().replace(/\s+/g, ' ');
-  const headingSize = Math.round(short * .056);
-  context.font = 'bold ' + headingSize + 'px ' + font;
-  context.fillText(template.title, tx * width, ty * height, textWidth);
+  const headingSize = Math.round(short * .059);
+  const titleX = tx * width;
+  const titleY = ty * height;
+  context.font = '600 ' + headingSize + 'px ' + displayFont;
+  context.fillText(template.title, titleX, titleY, textWidth);
+  context.globalAlpha = .55;
+  context.fillRect(titleX, titleY + headingSize * 1.2, Math.min(textWidth * .25, short * .125), context.lineWidth);
+  context.globalAlpha = 1;
 
   if (body) {
-    const bodyTop = ty * height + headingSize * 1.25;
-    let size = Math.round(short * .032);
+    const bodyTop = titleY + headingSize * 1.52;
+    let size = Math.round(short * .029);
     let lines;
     do {
       context.font = size + 'px ' + font;
@@ -423,9 +483,10 @@ async function generateDetails(event) {
       ? await referencePalette(draft.reference.blob)
       : promptPalette(draft.candidatePrompt, draft.selected);
     bitmap = await createImageBitmap(draft.product.blob);
+    const backdrop = productNeedsBackdrop(bitmap);
     for (const [index, setting] of draft.settings.slice(0, draft.count).entries()) {
       status('output-status', '正在生成第 ' + (index + 1) + ' 张，共 ' + draft.count + ' 张。');
-      const image = renderDetail(bitmap, setting, palette);
+      const image = renderDetail(bitmap, setting, palette, backdrop);
       const blob = await png(image);
       results.push({ url: URL.createObjectURL(blob), title: templates[setting.template].title, width: image.width, height: image.height });
     }
@@ -443,8 +504,29 @@ async function generateDetails(event) {
 }
 
 function bindControls() {
-  $('product-file').addEventListener('change', event => upload('product', event.target));
-  $('reference-file').addEventListener('change', event => upload('reference', event.target));
+  for (const kind of ['product', 'reference']) {
+    $(kind + '-file').addEventListener('change', event => {
+      const file = event.target.files[0];
+      event.target.value = '';
+      void upload(kind, file);
+    });
+  }
+  $('use-sample').addEventListener('click', () => {
+    const sample = fetch('silver-ring.webp').then(async response => {
+      if (!response.ok) {
+        throw new Error('银戒示例载入失败，请重试。');
+      }
+      return new Blob([await response.arrayBuffer()], { type: 'image/webp' });
+    });
+    void upload('product', sample, true);
+  });
+  for (const suggestion of document.querySelectorAll('[data-prompt]')) {
+    suggestion.addEventListener('click', () => {
+      draft.prompt = suggestion.dataset.prompt;
+      $('style-prompt').value = draft.prompt;
+      $('style-form').requestSubmit();
+    });
+  }
   for (const input of document.querySelectorAll('input[name="style-source"]')) {
     input.addEventListener('change', () => {
       draft.source = input.value;

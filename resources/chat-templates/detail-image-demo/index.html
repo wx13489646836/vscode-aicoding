@@ -3,62 +3,80 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>商品详情图工作台</title>
+  <title>银饰详情图工作台</title>
   <link rel="stylesheet" href="styles.css">
   <script src="app.js" defer></script>
 </head>
 <body>
   <header class="masthead">
     <div class="masthead-inner">
-      <h1>商品详情图工作台</h1>
+      <h1>银饰详情图工作台</h1>
       <p class="version">本地演示 <strong id="version">载入中</strong></p>
     </div>
   </header>
   <p id="app-status" class="app-status" role="status"></p>
   <main id="studio" hidden>
     <nav aria-label="工作台步骤">
-      <a href="#product">白底商品图</a>
-      <a href="#style">选择风格</a>
-      <a href="#template">设置详情图</a>
-      <a href="#output">预览与下载</a>
+      <a href="#product"><span aria-hidden="true">01</span> 商品原图</a>
+      <a href="#style"><span aria-hidden="true">02</span> 风格与布光</a>
+      <a href="#template"><span aria-hidden="true">03</span> 详情图编排</a>
+      <a href="#output"><span aria-hidden="true">04</span> 预览与下载</a>
     </nav>
     <div class="stages">
       <section id="product" class="stage">
-        <h2>白底商品图</h2>
-        <fieldset id="product-fields" aria-label="白底商品图">
-          <div class="upload">
-            <div>
-              <label for="product-file">上传商品图</label>
-              <input id="product-file" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="product-status">
-              <p id="product-status" class="status" role="status">请选择 PNG、JPEG 或 WebP 格式的白底商品图。</p>
+        <fieldset id="product-fields" aria-labelledby="product-title">
+          <div class="product-grid">
+            <div class="product-intro">
+              <h2 id="product-title">从白底图<br>开始制作</h2>
+              <div class="upload-actions">
+                <div class="file-control">
+                  <label for="product-file">上传白底图</label>
+                  <input id="product-file" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="product-status">
+                </div>
+                <button id="use-sample" type="button" class="text-button">使用银戒示例</button>
+              </div>
+              <p id="product-status" class="status" role="status">支持 PNG、JPEG、WebP。</p>
             </div>
-            <img id="product-preview" alt="商品图预览" hidden>
+            <figure class="product-display">
+              <img class="sample-image" src="silver-ring.webp" alt="抛光银戒棚拍示例" width="900" height="900">
+              <img id="product-preview" alt="已上传的商品图" hidden>
+              <figcaption id="product-caption">银戒示例</figcaption>
+            </figure>
           </div>
         </fieldset>
       </section>
 
-      <section id="style" class="stage">
-        <h2>选择风格</h2>
-        <p id="style-locked" class="locked">上传商品图后可以选择风格。</p>
-        <fieldset id="style-fields" aria-label="选择风格">
+      <section id="style" class="stage following">
+        <div class="section-head">
+          <h2>风格与布光</h2>
+          <p id="style-locked" class="locked">上传商品图后可用</p>
+        </div>
+        <fieldset id="style-fields" aria-label="风格与布光">
           <fieldset class="style-options">
-            <legend>风格来源</legend>
-            <label><input type="radio" name="style-source" value="prompt" checked> 文字生成</label>
-            <label><input type="radio" name="style-source" value="reference"> 上传参考图</label>
+            <legend class="sr-only">风格来源</legend>
+            <label><input type="radio" name="style-source" value="prompt" checked><span>文字生成</span></label>
+            <label><input type="radio" name="style-source" value="reference"><span>上传参考图</span></label>
           </fieldset>
           <div id="prompt-panel">
             <form id="style-form">
-              <label for="style-prompt">描述想要的风格</label>
-              <input id="style-prompt" type="text" maxlength="100" placeholder="例如 冷色极简、浅蓝背景、柔和棚拍光" required>
-              <button type="submit">生成风格图</button>
+              <label for="style-prompt">描述想要的布光与背景</label>
+              <input id="style-prompt" type="text" maxlength="100" placeholder="例如 月白底，柔和侧光，保留银饰的抛光纹理" required>
+              <button type="submit" class="primary">生成风格图</button>
             </form>
+            <div class="prompt-suggestions" aria-label="可用的风格提示">
+              <button type="button" data-prompt="月白底，柔和侧光，明亮的银饰商品目录">月白柔光</button>
+              <button type="button" data-prompt="冷银灰背景，条形反光，干净的金属质感">冷银棚拍</button>
+              <button type="button" data-prompt="黑曜石背景，聚光灯，强调银饰的高光轮廓">黑曜聚光</button>
+            </div>
             <div id="style-candidates" class="candidates" aria-label="风格候选"></div>
           </div>
           <div class="upload" id="reference-panel" hidden>
             <div>
-              <label for="reference-file">上传风格参考图</label>
-              <input id="reference-file" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="reference-status">
-              <p id="reference-status" class="status" role="status">从参考图提取配色，用于后续详情图。</p>
+              <div class="file-control">
+                <label for="reference-file">上传风格参考图</label>
+                <input id="reference-file" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="reference-status">
+              </div>
+              <p id="reference-status" class="status" role="status">提取参考图的配色，用于详情图。</p>
             </div>
             <img id="reference-preview" alt="风格参考图预览" hidden>
           </div>
@@ -66,22 +84,28 @@
         </fieldset>
       </section>
 
-      <section id="template" class="stage">
-        <h2>设置详情图</h2>
-        <p id="template-locked" class="locked">选定风格后可以配置每张详情图。</p>
+      <section id="template" class="stage following">
+        <div class="section-head">
+          <h2>详情图编排</h2>
+          <p id="template-locked" class="locked">选定风格后可用</p>
+        </div>
         <form id="detail-form">
           <fieldset id="template-fields" aria-label="详情图设置">
-            <label for="image-count">详情图张数</label>
-            <select id="image-count"></select>
+            <div class="count-control">
+              <label for="image-count">详情图张数</label>
+              <select id="image-count"></select>
+            </div>
             <div id="image-settings" class="image-settings"></div>
             <button type="submit" class="primary">生成详情图</button>
           </fieldset>
         </form>
       </section>
 
-      <section id="output" class="stage" aria-labelledby="output-title">
-        <h2 id="output-title">预览与下载</h2>
-        <p id="output-status" class="status" role="status">完成设置后，生成的详情图会显示在这里。</p>
+      <section id="output" class="stage following" aria-labelledby="output-title">
+        <div class="section-head">
+          <h2 id="output-title">预览与下载</h2>
+          <p id="output-status" class="status" role="status">生成后可逐张下载 PNG</p>
+        </div>
         <div id="result-list" class="result-list"></div>
       </section>
     </div>

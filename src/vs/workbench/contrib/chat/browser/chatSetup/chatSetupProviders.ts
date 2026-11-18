@@ -10,6 +10,7 @@ import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
+import { hashAsync } from '../../../../../base/common/hash.js';
 import { MarkdownString } from '../../../../../base/common/htmlContent.js';
 import { Lazy } from '../../../../../base/common/lazy.js';
 import { Disposable, DisposableStore, IDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -76,7 +77,13 @@ const ToolsAgentContextKey = ContextKeyExpr.and(
 	ContextKeyExpr.not(`previewFeaturesDisabled`) // Set by extension
 );
 
-const DETAIL_IMAGE_DEMO_FILES = ['index.html', 'styles.css', 'app.js', 'start-preview.bat'] as const;
+const DETAIL_IMAGE_DEMO_FILES = ['index.html', 'styles.css', 'app.js', 'silver-ring.webp', 'start-preview.bat'] as const;
+// Fingerprints of the original generated files, normalized to LF.
+const DETAIL_IMAGE_DEMO_ORIGINAL: Partial<Record<typeof DETAIL_IMAGE_DEMO_FILES[number], string>> = {
+	'index.html': '6df406a5c9ada33afc7194f48f30eb119eb6da1d',
+	'styles.css': '984ad8e2b196600696e0d8c28b8d0125dcb9c17f',
+	'app.js': '3793eadfc43c84a257c52bb2c8604100411dc4d2',
+};
 
 export class SetupAgent extends Disposable implements IChatAgentImplementation {
 
@@ -810,18 +817,29 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 
 				const appRoot = (this.environmentService as IWorkbenchEnvironmentService & { appRoot: string }).appRoot;
 				const source = URI.file(join(appRoot, 'resources', 'chat-templates', 'detail-image-demo'));
-				const created = [];
-				for (const name of DETAIL_IMAGE_DEMO_FILES) {
+				const files = await Promise.all(DETAIL_IMAGE_DEMO_FILES.map(async name => {
 					const destination = URI.joinPath(target, name);
 					const content = await this.fileService.readFile(URI.joinPath(source, name));
-					if (await this.fileService.exists(destination)) {
-						if (!current && !(await this.fileService.readFile(destination)).value.equals(content.value)) {
-							report('detail-image-demo 中已有同名文件。请打开一个新的工作区生成演示。');
-							return;
-						}
-					} else {
+					const existing = await this.fileService.exists(destination) ? await this.fileService.readFile(destination) : undefined;
+					const original = DETAIL_IMAGE_DEMO_ORIGINAL[name];
+					const differs = !!existing && !existing.value.equals(content.value);
+					const generated = original && existing && differs ? await hashAsync(existing.value.toString().replace(/\r\n/g, '\n')) === original : !differs;
+					return { destination, content, existing, differs, generated, original };
+				}));
+				if (!current && files.some(file => file.differs)) {
+					report('detail-image-demo 中已有同名文件。请打开一个新的工作区生成演示。');
+					return;
+				}
+
+				// Update the bundled layout together so a customized project never ends up with a mix of template versions.
+				const refresh = files.every(file => !file.original || file.generated);
+				const created: URI[] = [];
+				for (const { destination, content, existing, differs, original } of files) {
+					if (!existing) {
 						await this.fileService.createFile(destination, content.value);
 						created.push(destination);
+					} else if (refresh && differs && original) {
+						await this.fileService.writeFile(destination, content.value, { etag: existing.etag, mtime: existing.mtime, atomic: { postfix: '.tmp' } });
 					}
 				}
 
